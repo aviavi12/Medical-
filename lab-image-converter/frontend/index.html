@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratory Image Converter</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Laboratory Image Converter</h1>
+            <p class="subtitle">Convert CZI and TIFF microscopy images to standard JPEG/JPG images.</p>
+        </header>
+
+        <div class="warning-banner">
+            <strong>Note:</strong> JPEG is intended for viewing and sharing. It may reduce bit depth, precision, metadata, and scientific image information. Always retain the original CZI/TIFF file for scientific analysis and archival purposes.
+        </div>
+
+        <main>
+            <!-- Upload Area -->
+            <div id="upload-area" class="upload-area">
+                <div class="drop-zone" id="drop-zone">
+                    <div class="drop-icon">&#128196;</div>
+                    <p>Drag &amp; Drop File</p>
+                    <p class="drop-or">or</p>
+                    <label class="file-btn">
+                        Choose File
+                        <input type="file" id="file-input" accept=".czi,.tif,.tiff,.png,.jpg,.jpeg" hidden>
+                    </label>
+                    <p class="formats-hint">Supported: CZI, TIFF, TIF, PNG, JPEG, JPG</p>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div id="progress-section" class="section hidden">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p id="progress-text">Uploading...</p>
+            </div>
+
+            <!-- Inspection Result -->
+            <div id="inspect-section" class="section hidden">
+                <h2>File Information</h2>
+                <div class="metadata-grid" id="metadata-grid"></div>
+
+                <!-- CZI Dimension Selection -->
+                <div id="czi-options" class="hidden">
+                    <h3>Select Image Plane</h3>
+                    <p class="dim-note">This CZI contains multiple images. Select which plane to convert.</p>
+                    <div class="option-row">
+                        <label>Z plane: <select id="sel-z"></select></label>
+                        <label>Channel: <select id="sel-channel"></select></label>
+                        <label>Time point: <select id="sel-timepoint"></select></label>
+                        <label>Scene: <select id="sel-scene"></select></label>
+                    </div>
+                </div>
+
+                <!-- TIFF Page Selection -->
+                <div id="tiff-options" class="hidden">
+                    <h3>Select Page</h3>
+                    <p class="dim-note">This TIFF contains multiple pages.</p>
+                    <div class="option-row">
+                        <label>Page: <select id="sel-page"></select></label>
+                    </div>
+                </div>
+
+                <!-- Quality -->
+                <div class="option-row">
+                    <label>JPEG quality:
+                        <select id="sel-quality">
+                            <option value="80">80</option>
+                            <option value="90">90</option>
+                            <option value="95" selected>95</option>
+                            <option value="100">100</option>
+                        </select>
+                    </label>
+                </div>
+
+                <button id="convert-btn" class="convert-btn">Convert to JPEG</button>
+            </div>
+
+            <!-- Success -->
+            <div id="success-section" class="section hidden">
+                <div class="success-icon">&#10003;</div>
+                <h2>Conversion Completed</h2>
+                <div class="result-info">
+                    <p><strong>Original:</strong> <span id="original-name"></span></p>
+                    <p><strong>Output:</strong> <span id="output-name"></span></p>
+                </div>
+                <a id="download-btn" class="download-btn" href="#">Download JPEG</a>
+                <button id="reset-btn" class="reset-btn">Convert Another File</button>
+            </div>
+
+            <!-- Error -->
+            <div id="error-section" class="section hidden">
+                <div class="error-icon">&#10007;</div>
+                <h2>Error</h2>
+                <p id="error-message"></p>
+                <button id="error-reset-btn" class="reset-btn">Try Again</button>
+            </div>
+        </main>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MAX_UPLOAD_SIZE_MB=2048
+      - DEFAULT_JPEG_QUALITY=95
+      - CLEANUP_AFTER_DOWNLOAD=false
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
