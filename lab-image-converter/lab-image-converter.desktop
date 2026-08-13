@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Lab Image Converter
+GenericName=Scientific Image Converter
+Comment=Convert CZI and TIFF microscopy images to JPEG
+Exec=INSTALL_DIR_PLACEHOLDER/launch.sh
+Icon=INSTALL_DIR_PLACEHOLDER/icon.svg
+Terminal=false
+Categories=Science;Graphics;ImageProcessing;
+Keywords=microscopy;CZI;TIFF;JPEG;converter;laboratory;
+StartupNotify=true
