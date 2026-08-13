@@ -40,5 +40,22 @@ class ConversionResponse(BaseModel):
     error: Optional[str] = None
 
 
+class BatchFileResult(BaseModel):
+    filename: str
+    success: bool
+    output_filename: Optional[str] = None
+    download_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BatchConversionResponse(BaseModel):
+    total: int
+    succeeded: int
+    failed: int
+    output_directory: Optional[str] = None
+    files: list[BatchFileResult]
+    download_all_url: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     status: str

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,75 +22,66 @@
             <div id="upload-area" class="upload-area">
                 <div class="drop-zone" id="drop-zone">
                     <div class="drop-icon">&#128196;</div>
-                    <p>Drag &amp; Drop File</p>
+                    <p>Drag &amp; Drop Files Here</p>
                     <p class="drop-or">or</p>
                     <label class="file-btn">
-                        Choose File
-                        <input type="file" id="file-input" accept=".czi,.tif,.tiff,.png,.jpg,.jpeg" hidden>
+                        Choose Files
+                        <input type="file" id="file-input" accept=".czi,.tif,.tiff,.png,.jpg,.jpeg" multiple hidden>
                     </label>
                     <p class="formats-hint">Supported: CZI, TIFF, TIF, PNG, JPEG, JPG</p>
+                </div>
+
+                <!-- Output Directory -->
+                <div class="output-dir-section">
+                    <label for="output-dir">Output Directory (optional):</label>
+                    <input type="text" id="output-dir" placeholder="e.g. /home/user/converted_images" class="text-input">
+                    <p class="output-dir-hint">Leave empty to download from browser. Fill in a server path to save files directly to that folder.</p>
+                </div>
+
+                <!-- Selected Files List -->
+                <div id="file-list-section" class="hidden">
+                    <div class="file-list-header">
+                        <h3>Selected Files (<span id="file-count">0</span>)</h3>
+                        <button id="clear-files-btn" class="clear-btn">Clear All</button>
+                    </div>
+                    <ul id="file-list" class="file-list"></ul>
+
+                    <!-- Quality -->
+                    <div class="option-row">
+                        <label>JPEG quality:
+                            <select id="sel-quality">
+                                <option value="80">80</option>
+                                <option value="90">90</option>
+                                <option value="95" selected>95</option>
+                                <option value="100">100</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <button id="convert-btn" class="convert-btn">Convert All to JPEG</button>
                 </div>
             </div>
 
             <!-- Progress -->
             <div id="progress-section" class="section hidden">
+                <h2>Converting...</h2>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progress-fill"></div>
                 </div>
-                <p id="progress-text">Uploading...</p>
+                <p id="progress-text">0 / 0</p>
             </div>
 
-            <!-- Inspection Result -->
-            <div id="inspect-section" class="section hidden">
-                <h2>File Information</h2>
-                <div class="metadata-grid" id="metadata-grid"></div>
-
-                <!-- CZI Dimension Selection -->
-                <div id="czi-options" class="hidden">
-                    <h3>Select Image Plane</h3>
-                    <p class="dim-note">This CZI contains multiple images. Select which plane to convert.</p>
-                    <div class="option-row">
-                        <label>Z plane: <select id="sel-z"></select></label>
-                        <label>Channel: <select id="sel-channel"></select></label>
-                        <label>Time point: <select id="sel-timepoint"></select></label>
-                        <label>Scene: <select id="sel-scene"></select></label>
-                    </div>
+            <!-- Results -->
+            <div id="results-section" class="section hidden">
+                <div class="results-header">
+                    <div class="success-icon">&#10003;</div>
+                    <h2>Conversion Complete</h2>
                 </div>
-
-                <!-- TIFF Page Selection -->
-                <div id="tiff-options" class="hidden">
-                    <h3>Select Page</h3>
-                    <p class="dim-note">This TIFF contains multiple pages.</p>
-                    <div class="option-row">
-                        <label>Page: <select id="sel-page"></select></label>
-                    </div>
-                </div>
-
-                <!-- Quality -->
-                <div class="option-row">
-                    <label>JPEG quality:
-                        <select id="sel-quality">
-                            <option value="80">80</option>
-                            <option value="90">90</option>
-                            <option value="95" selected>95</option>
-                            <option value="100">100</option>
-                        </select>
-                    </label>
-                </div>
-
-                <button id="convert-btn" class="convert-btn">Convert to JPEG</button>
-            </div>
-
-            <!-- Success -->
-            <div id="success-section" class="section hidden">
-                <div class="success-icon">&#10003;</div>
-                <h2>Conversion Completed</h2>
-                <div class="result-info">
-                    <p><strong>Original:</strong> <span id="original-name"></span></p>
-                    <p><strong>Output:</strong> <span id="output-name"></span></p>
-                </div>
-                <a id="download-btn" class="download-btn" href="#">Download JPEG</a>
-                <button id="reset-btn" class="reset-btn">Convert Another File</button>
+                <div class="results-summary" id="results-summary"></div>
+                <div id="output-dir-display" class="output-dir-display hidden"></div>
+                <ul id="results-list" class="results-list"></ul>
+                <a id="download-all-btn" class="download-btn hidden" href="#">Download All (ZIP)</a>
+                <button id="reset-btn" class="reset-btn">Convert More Files</button>
             </div>
 
             <!-- Error -->

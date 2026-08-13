@@ -142,3 +142,104 @@ def test_convert_tiff_16bit(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["success"] is True
+
+
+# --- Batch conversion tests ---
+
+
+def test_batch_convert_multiple_files(client):
+    png = _make_png_bytes()
+    jpg = _make_jpeg_bytes()
+    tif = _make_tiff_bytes()
+    resp = client.post(
+        "/api/convert-batch",
+        files=[
+            ("files", ("img1.png", png, "image/png")),
+            ("files", ("img2.jpg", jpg, "image/jpeg")),
+            ("files", ("img3.tif", tif, "image/tiff")),
+        ],
+        data={"quality": "95"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 3
+    assert body["succeeded"] == 3
+    assert body["failed"] == 0
+    assert len(body["files"]) == 3
+    for f in body["files"]:
+        assert f["success"] is True
+        assert f["download_url"].startswith("/api/download/")
+
+
+def test_batch_convert_with_unsupported_file(client):
+    png = _make_png_bytes()
+    resp = client.post(
+        "/api/convert-batch",
+        files=[
+            ("files", ("good.png", png, "image/png")),
+            ("files", ("bad.xyz", b"not an image", "application/octet-stream")),
+        ],
+        data={"quality": "95"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 2
+    assert body["succeeded"] == 1
+    assert body["failed"] == 1
+    assert body["files"][0]["success"] is True
+    assert body["files"][1]["success"] is False
+
+
+def test_batch_convert_download_all_zip(client):
+    png1 = _make_png_bytes(32, 32)
+    png2 = _make_png_bytes(48, 48)
+    resp = client.post(
+        "/api/convert-batch",
+        files=[
+            ("files", ("a.png", png1, "image/png")),
+            ("files", ("b.png", png2, "image/png")),
+        ],
+        data={"quality": "90"},
+    )
+    body = resp.json()
+    assert body["download_all_url"] is not None
+
+    dl = client.get(body["download_all_url"])
+    assert dl.status_code == 200
+    assert dl.headers["content-type"] == "application/zip"
+
+
+def test_batch_convert_with_output_directory(client, tmp_path):
+    png = _make_png_bytes()
+    out_dir = str(tmp_path / "my_output")
+    resp = client.post(
+        "/api/convert-batch",
+        files=[("files", ("sample.png", png, "image/png"))],
+        data={"quality": "95", "output_directory": out_dir},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["succeeded"] == 1
+    assert body["output_directory"] == out_dir
+
+    from pathlib import Path
+    out = Path(out_dir)
+    jpgs = list(out.glob("*.jpg"))
+    assert len(jpgs) == 1
+
+
+def test_batch_convert_single_file_no_zip(client):
+    png = _make_png_bytes()
+    resp = client.post(
+        "/api/convert-batch",
+        files=[("files", ("one.png", png, "image/png"))],
+        data={"quality": "95"},
+    )
+    body = resp.json()
+    assert body["succeeded"] == 1
+    assert body["download_all_url"] is None
+
+
+def test_batch_download_all_not_found(client):
+    resp = client.get("/api/download-all/nonexistent")
+    assert resp.status_code == 404
