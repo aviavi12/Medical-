@@ -24,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_DIR="${SCRIPT_DIR}/.venv"
 DESKTOP_DIR="${HOME}/Desktop"
 APPS_DIR="${HOME}/.local/share/applications"
-DESKTOP_FILE="lab-image-converter.desktop"
+DESKTOP_FILE="labfile-converter.desktop"
 OFFLINE_DIR="${SCRIPT_DIR}/offline-packages"
 
 RED='\033[0;31m'
@@ -35,7 +35,7 @@ NC='\033[0m'
 
 echo ""
 echo -e "${BLUE}=========================================${NC}"
-echo -e "${BLUE}  Lab Image Converter — Installer${NC}"
+echo -e "${BLUE}  LabFile Converter — Installer${NC}"
 echo -e "${BLUE}=========================================${NC}"
 echo ""
 
@@ -175,7 +175,7 @@ echo "  Location:   ${SCRIPT_DIR}"
 echo "  Desktop:    ${DESKTOP_DIR}/${DESKTOP_FILE}"
 echo ""
 echo "  How to start:"
-echo "    Option 1:  Double-click the 'Lab Image Converter' icon on your Desktop"
+echo "    Option 1:  Double-click the 'LabFile Converter' icon on your Desktop"
 echo "    Option 2:  bash ${SCRIPT_DIR}/launch.sh"
 echo "    Option 3:  cd ${SCRIPT_DIR} && source .venv/bin/activate && uvicorn app.main:app --reload"
 echo ""

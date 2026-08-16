@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DESKTOP_DIR="${HOME}/Desktop"
 APPS_DIR="${HOME}/.local/share/applications"
-DESKTOP_FILE="lab-image-converter.desktop"
+DESKTOP_FILE="labfile-converter.desktop"
 
 echo ""
 echo "=== Lab Image Converter — Uninstaller ==="
