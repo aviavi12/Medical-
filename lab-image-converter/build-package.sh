@@ -70,31 +70,34 @@ rm -f "${SCRIPT_DIR}/outputs/"*.* 2>/dev/null || true
 
 echo "  Clean."
 
-# Convert Windows scripts to CRLF line endings
-for f in "${SCRIPT_DIR}"/*.cmd "${SCRIPT_DIR}"/*.bat "${SCRIPT_DIR}"/*.ps1; do
-    [ -f "$f" ] && sed -i 's/$/\r/' "$f" 2>/dev/null || true
-done
-echo "  Windows line endings applied to .cmd/.bat/.ps1 files."
-
 ########################################
 # Step 3: Create archive
 ########################################
 echo -e "${YELLOW}[3/3]${NC} Creating archive..."
 
-cd "${SCRIPT_DIR}/.."
-ARCHIVE="${SCRIPT_DIR}/../${PACKAGE_NAME}.tar.gz"
+# Copy to temp dir, convert Windows scripts to CRLF there (not in git)
+TEMP_BUILD=$(mktemp -d)
+PROJ_NAME="$(basename "$SCRIPT_DIR")"
+cp -a "${SCRIPT_DIR}" "${TEMP_BUILD}/${PROJ_NAME}"
+rm -rf "${TEMP_BUILD}/${PROJ_NAME}/.venv" "${TEMP_BUILD}/${PROJ_NAME}/.git"
+
+for f in "${TEMP_BUILD}/${PROJ_NAME}"/*.cmd "${TEMP_BUILD}/${PROJ_NAME}"/*.bat "${TEMP_BUILD}/${PROJ_NAME}"/*.ps1; do
+    [ -f "$f" ] && sed -i 's/\r$//' "$f" && sed -i 's/$/\r/' "$f" 2>/dev/null || true
+done
+echo "  Windows line endings applied to .cmd/.ps1 files."
+
+cd "${TEMP_BUILD}"
+ARCHIVE="${TEMP_BUILD}/${PACKAGE_NAME}.tar.gz"
 
 tar czf "$ARCHIVE" \
-    --exclude='.venv' \
-    --exclude='.git' \
     --exclude='*.pyc' \
     --exclude='__pycache__' \
     --exclude='.pytest_cache' \
     --exclude='*.tar.gz' \
-    "$(basename "$SCRIPT_DIR")"
+    "$PROJ_NAME"
 
-# Move archive into the project directory for convenience
 mv "$ARCHIVE" "${SCRIPT_DIR}/${PACKAGE_NAME}.tar.gz"
+rm -rf "$TEMP_BUILD"
 ARCHIVE="${SCRIPT_DIR}/${PACKAGE_NAME}.tar.gz"
 
 ARCHIVE_SIZE=$(du -h "$ARCHIVE" | cut -f1)
