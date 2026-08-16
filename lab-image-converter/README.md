@@ -46,27 +46,40 @@ Scientific images with bit depths above 8-bit are normalized to 0-255 using min/
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.10+ (recommended: Python 3.12)
 
-### Local Setup
+### Windows (Recommended for most users)
+
+1. Extract the `lab-image-converter-portable.tar.gz` file
+2. Open the `lab-image-converter` folder
+3. Double-click **`install.bat`**
+4. After installation, double-click **"LabFile Converter"** on your Desktop
+
+### Linux / macOS
+
+1. Extract the archive:
+   ```bash
+   tar xzf lab-image-converter-portable.tar.gz
+   cd lab-image-converter
+   bash install.sh
+   ```
+2. Double-click the **"LabFile Converter"** icon on your Desktop, or run:
+   ```bash
+   bash launch.sh
+   ```
+
+### Manual Setup (any OS)
 
 ```bash
-# Clone the repository
 cd lab-image-converter
-
-# Create virtual environment
 python -m venv .venv
 
 # Activate (Linux/macOS)
 source .venv/bin/activate
-
 # Activate (Windows)
-# .venv\Scripts\activate
+.venv\Scripts\activate
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the application
 uvicorn app.main:app --reload
 ```
 
