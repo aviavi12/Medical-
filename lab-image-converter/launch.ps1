@@ -21,12 +21,32 @@ try {
     exit 0
 } catch {}
 
-# Start server
+# Start server in background, wait for it, then open browser
 Write-Host "Starting LabFile Converter..." -ForegroundColor Blue
-Write-Host "Server will be at: $Url" -ForegroundColor Blue
-Write-Host "Close this window to stop the server." -ForegroundColor Yellow
 Write-Host ""
 
-Start-Process $Url
+$job = Start-Process -FilePath ".venv\Scripts\python.exe" `
+    -ArgumentList "-m uvicorn app.main:app --host 127.0.0.1 --port $Port" `
+    -WorkingDirectory $ScriptDir `
+    -PassThru
 
-& .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port $Port
+# Wait up to 15 seconds for server to be ready
+$ready = $false
+for ($i = 0; $i -lt 15; $i++) {
+    Start-Sleep -Seconds 1
+    try {
+        Invoke-WebRequest -Uri "$Url/health" -TimeoutSec 1 -UseBasicParsing -ErrorAction Stop | Out-Null
+        $ready = $true
+        break
+    } catch {}
+}
+
+if ($ready) {
+    Write-Host "Server is running at: $Url" -ForegroundColor Green
+    Start-Process $Url
+    Write-Host ""
+    Write-Host "The browser should open automatically." -ForegroundColor Green
+    Write-Host "To stop the server, run: .\stop-server.ps1" -ForegroundColor Yellow
+} else {
+    Write-Host "Server may still be starting. Try opening $Url manually." -ForegroundColor Yellow
+}

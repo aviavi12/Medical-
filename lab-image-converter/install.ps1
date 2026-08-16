@@ -99,7 +99,7 @@ try {
     $WshShell = New-Object -ComObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
     $Shortcut.TargetPath = "powershell.exe"
-    $Shortcut.Arguments = "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LaunchScript`""
+    $Shortcut.Arguments = "-ExecutionPolicy Bypass -File `"$LaunchScript`""
     $Shortcut.WorkingDirectory = $ScriptDir
     $Shortcut.Description = "LabFile Converter - Scientific Image Converter"
     $Shortcut.Save()
