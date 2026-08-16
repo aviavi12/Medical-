@@ -93,19 +93,18 @@ Write-Host "[5/5] Creating desktop shortcut..." -ForegroundColor Yellow
 
 $DesktopPath = [Environment]::GetFolderPath("Desktop")
 $ShortcutPath = Join-Path $DesktopPath "LabFile Converter.lnk"
-$LaunchScript = Join-Path $ScriptDir "launch.ps1"
+$StartCmd = Join-Path $ScriptDir "START.cmd"
 
 try {
     $WshShell = New-Object -ComObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
-    $Shortcut.TargetPath = "powershell.exe"
-    $Shortcut.Arguments = "-ExecutionPolicy Bypass -File `"$LaunchScript`""
+    $Shortcut.TargetPath = $StartCmd
     $Shortcut.WorkingDirectory = $ScriptDir
     $Shortcut.Description = "LabFile Converter - Scientific Image Converter"
     $Shortcut.Save()
     Write-Host "  Shortcut installed on Desktop." -ForegroundColor Green
 } catch {
-    Write-Host "  Could not create shortcut. You can run launch.ps1 manually." -ForegroundColor Yellow
+    Write-Host "  Could not create shortcut. Double-click START.cmd to launch." -ForegroundColor Yellow
 }
 
 # --- Verify ---

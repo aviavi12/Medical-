@@ -70,6 +70,12 @@ rm -f "${SCRIPT_DIR}/outputs/"*.* 2>/dev/null || true
 
 echo "  Clean."
 
+# Convert Windows scripts to CRLF line endings
+for f in "${SCRIPT_DIR}"/*.cmd "${SCRIPT_DIR}"/*.bat "${SCRIPT_DIR}"/*.ps1; do
+    [ -f "$f" ] && sed -i 's/$/\r/' "$f" 2>/dev/null || true
+done
+echo "  Windows line endings applied to .cmd/.bat/.ps1 files."
+
 ########################################
 # Step 3: Create archive
 ########################################
