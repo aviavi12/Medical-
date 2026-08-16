@@ -1,1 +1,1 @@
-@powershell -ExecutionPolicy Bypass -File "%~dp0launch.ps1"
+@powershell -ExecutionPolicy Bypass -File "%~dp0launch.ps1"

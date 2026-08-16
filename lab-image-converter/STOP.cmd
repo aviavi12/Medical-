@@ -1,1 +1,1 @@
-@powershell -ExecutionPolicy Bypass -File "%~dp0stop-server.ps1"
+@powershell -ExecutionPolicy Bypass -File "%~dp0stop-server.ps1"
