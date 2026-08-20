@@ -1,0 +1,51 @@
+"""Shared ML primitives: honesty envelope, typed results, device, registry."""
+
+from ml.common.results import (
+    AvailabilityState,
+    ModelInfo,
+    Availability,
+    available,
+    model_unavailable,
+    low_confidence,
+    no_signal,
+)
+from ml.common.types import (
+    BBox,
+    PersonDetection,
+    FaceDetection,
+    Track,
+    FaceQuality,
+    FaceLandmarks,
+    MouthCrop,
+    LipReadingSegment,
+    LipReadingWord,
+    LipReadingResult,
+    HeadPose,
+    GazeDirection,
+    GazeResult,
+    AudioArtifact,
+)
+
+__all__ = [
+    "AvailabilityState",
+    "ModelInfo",
+    "Availability",
+    "available",
+    "model_unavailable",
+    "low_confidence",
+    "no_signal",
+    "BBox",
+    "PersonDetection",
+    "FaceDetection",
+    "Track",
+    "FaceQuality",
+    "FaceLandmarks",
+    "MouthCrop",
+    "LipReadingSegment",
+    "LipReadingWord",
+    "LipReadingResult",
+    "HeadPose",
+    "GazeDirection",
+    "GazeResult",
+    "AudioArtifact",
+]

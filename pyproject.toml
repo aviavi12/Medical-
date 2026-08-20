@@ -1,0 +1,24 @@
+[project]
+name = "silentspeak-lab"
+version = "0.1.0"
+description = "English silent-video lip reading + multi-person tracking + gaze analysis + synthetic speech"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "ml: tests that exercise ML interfaces (use mock adapters)",
+    "integration: end-to-end pipeline tests",
+    "slow: slower tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]

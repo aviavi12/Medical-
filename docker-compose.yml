@@ -1,0 +1,62 @@
+# SilentSpeak Lab — local orchestration (§91).
+# GPU configuration is documented separately in docker/README.md.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: silentspeak
+      POSTGRES_PASSWORD: silentspeak
+      POSTGRES_DB: silentspeak
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silentspeak"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://silentspeak:silentspeak@postgres:5432/silentspeak
+      STORAGE_PATH: /data/storage
+      DEVICE: auto
+    ports:
+      - "8000:8000"
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  # Optional background worker (same image as api). Enable when moving off the
+  # in-process worker toward Celery + Redis.
+  # worker:
+  #   build: { context: ., dockerfile: docker/api.Dockerfile }
+  #   command: ["python", "-m", "apps.api.workers.run"]
+  #   environment: *api-env
+  #   depends_on: [postgres, redis]
+  #
+  # redis:
+  #   image: redis:7-alpine
+  #   ports: ["6379:6379"]
+
+volumes:
+  pgdata:
+  storage:

@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SilentSpeak Lab — heavy ML runtimes. Install only when running real models.
+# Without these, the corresponding subsystems report MODEL_UNAVAILABLE with the
+# exact missing dependency (never fabricated output). See docs/model-selection.md.
+#
+# GPU builds: install the CUDA/MPS-appropriate torch wheel from pytorch.org.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# --- shared ---
+torch>=2.2
+torchvision>=0.17
+onnxruntime>=1.17
+
+# --- person / face detection ---
+# AGPL-3.0 — review before distribution. See docs/model-selection.md for
+# permissively-licensed alternatives (YOLOX).
+ultralytics>=8.1
+
+# --- face detection / landmarks / iris ---
+mediapipe>=0.10
+
+# --- tracking (ByteTrack / BoT-SORT are typically vendored or pip-installed) ---
+# lap>=0.4
+# cython-bbox>=0.1
+
+# --- lip reading (model repos usually require manual weight download) ---
+# av-hubert / auto_avsr are installed from source per their licenses.
+
+# --- audio ASR for evaluation only (§45) ---
+# openai-whisper>=20231117
+
+# --- TTS (generic voice) ---
+# piper-tts>=1.2

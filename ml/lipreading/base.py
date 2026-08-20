@@ -1,0 +1,66 @@
+"""LipReadingModel interface (§23, §24).
+
+Every adapter declares its temporal input contract (required_fps, sequence
+length, input size, normalization) and returns a LipReadingResult whose
+``availability`` state is the single source of truth for whether the output is a
+real model prediction. Missing weights/deps/license ⇒ MODEL_UNAVAILABLE with the
+exact gap; the pipeline never fabricates a transcript.
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+from ml.common.config import MLConfig, get_ml_config
+from ml.common.results import Availability, ModelInfo
+from ml.common.types import LipReadingResult
+from ml.mouth.sequence import TemporalMouthSequence
+
+
+@dataclass
+class InputContract:
+    required_fps: float = 25.0
+    sequence_length: int = 75
+    input_size: tuple[int, int] = (96, 96)
+    normalization: str = "grayscale_0_1"
+
+
+class LipReadingModel(ABC):
+    name = "lip_reading"
+
+    def load(self) -> None:
+        """Optional explicit load; adapters may lazy-load in __init__."""
+
+    @abstractmethod
+    def input_contract(self) -> InputContract: ...
+
+    @abstractmethod
+    def availability(self) -> Availability: ...
+
+    @abstractmethod
+    def get_model_info(self) -> ModelInfo: ...
+
+    @abstractmethod
+    def predict(self, sequence: TemporalMouthSequence) -> LipReadingResult:
+        """Run visual speech recognition over a temporal mouth sequence."""
+
+
+def get_lip_reading_model(config: MLConfig | None = None) -> LipReadingModel:
+    config = config or get_ml_config()
+
+    if config.allow_mock:
+        from ml.lipreading.adapters.mock_adapter import MockLipReadingModel
+
+        return MockLipReadingModel()
+
+    name = config.lip_reading_model
+    if name == "avhubert":
+        from ml.lipreading.adapters.avhubert_adapter import AVHubertAdapter
+
+        return AVHubertAdapter(config)
+
+    # Unknown/other model requested but not wired.
+    from ml.lipreading.adapters.avhubert_adapter import AVHubertAdapter
+
+    return AVHubertAdapter(config)

@@ -1,0 +1,50 @@
+# SilentSpeak Lab — lip-reading training configuration (§73, §74).
+# Training is offline and separate from inference. Do not hard-code these values
+# elsewhere; the training scripts read them from here.
+
+dataset:
+  name: LRS3            # LRS2 | LRS3 | GRID | LRW
+  root: ./training/data/lrs3
+  split: train
+  # Datasets are used only under their own licenses; never auto-downloaded.
+  license: "See dataset provider terms"
+
+model:
+  architecture: avhubert   # visual speech recognition
+  pretrained: true
+  input:
+    required_fps: 25
+    sequence_length: 75
+    input_size: [96, 96]
+    normalization: grayscale_0_1
+
+training:
+  batch_size: 8
+  learning_rate: 0.0003
+  epochs: 30
+  weight_decay: 0.01
+  warmup_steps: 500
+  device: auto
+  mixed_precision: true      # only enabled where safe (§66)
+  checkpoint_dir: ./training/checkpoints
+
+augmentation:                # controlled; must not destroy lip information (§30)
+  brightness: true
+  contrast: true
+  blur: limited
+  compression_artifacts: mild
+  spatial_perturbation: small
+  temporal_frame_dropping: true
+
+evaluation:
+  metrics:
+    - WER
+    - CER
+    - sentence_accuracy
+  by_condition:              # break down accuracy by (§31)
+    - face_size
+    - pose
+    - lighting
+    - resolution
+    - speaker
+    - speaking_speed

@@ -1,0 +1,1 @@
+"""SilentSpeak Lab FastAPI backend."""

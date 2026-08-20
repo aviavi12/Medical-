@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0b0f14;
+  color: #e6edf3;
+}
+
+/* Non-color-only confidence indicators (§40, §81): patterns + text, not just hue. */
+.confidence-low {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid #4f9cf9;
+  outline-offset: 2px;
+}

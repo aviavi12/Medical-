@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+
+# Env
+.env
+.env.local
+
+# Storage / runtime artifacts (never commit uploaded videos or derived data)
+storage/
+!storage/.gitkeep
+*.sqlite
+*.sqlite3
+*.db
+
+# Node / Next.js
+node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+.turbo/
+
+# ML weights / checkpoints (never commit large binaries)
+training/checkpoints/
+*.pt
+*.pth
+*.onnx
+*.task
+*.tflite
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Test / build outputs
+out/
+dist/
+coverage/
+htmlcov/
