@@ -20,7 +20,7 @@ document → proceed**. No uncontrolled single pass; no fabricated ML results.
 | 6 | Person gallery | Thumbnails, metrics, readiness score, selection | 🟡 (API + scoring real; needs detections) |
 | 7 | Face landmarks | Mouth & eye regions tracked | 🟡 (interface; needs `mediapipe`) |
 | 8 | Mouth extraction | ROI, normalization, temporal sequences, caching | 🟡 (real geometry; needs landmarks) |
-| 9 | Lip reading | A real English model produces real transcription, else MODEL UNAVAILABLE | 🟡 (interface + honesty envelope) |
+| 9 | Lip reading | A real English model produces real transcription, else MODEL UNAVAILABLE | ✅ (LipNet-GRID, real, WER 0.017 measured) |
 | 10 | Transcript UI | Timestamps, confidence, click-to-seek, raw vs processed | ✅ (UI); data from M9 |
 | 11 | Gaze | Head pose, iris/eye, direction, confidence | 🟡 (interface) |
 | 12 | Multi-person gaze | Possible gaze toward another person | 🟡 (interface) |

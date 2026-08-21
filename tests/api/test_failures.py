@@ -10,18 +10,21 @@ def test_corrupted_video_rejected(client, corrupted_video):
     assert r.status_code == 400
 
 
-def test_missing_model_reports_unavailable(client, sample_video, monkeypatch):
-    """With mock inference OFF, analysis fails honestly naming the missing model."""
+def test_missing_model_reports_unavailable(monkeypatch):
+    """When lip-reading weights are absent, the model reports MODEL_UNAVAILABLE
+    naming the gap — it never fabricates a transcript (§31, §93)."""
     monkeypatch.setenv("ALLOW_MOCK_INFERENCE", "0")
-    with open(sample_video, "rb") as fh:
-        up = client.post("/api/videos", files={"file": ("clear.mp4", fh, "video/mp4")}).json()
-    vid = up["id"]
+    monkeypatch.setenv("MODELS_DIR", "/nonexistent-models-dir")
+    monkeypatch.setenv("LIP_READING_WEIGHTS", "/nonexistent/lipnet.pt")
+    monkeypatch.setenv("DLIB_LANDMARKS", "/nonexistent/pred.dat")
+    from ml.common.config import get_ml_config
+    from ml.common.results import AvailabilityState
+    from ml.lipreading import get_lip_reading_model
 
-    client.post(f"/api/videos/{vid}/analyze")
-    status = client.get(f"/api/videos/{vid}/status").json()
-    assert status["status"] == "FAILED"
-    assert status["error"]  # names the missing dependency
-    assert "unavailable" in status["error"].lower() or "install" in status["error"].lower()
+    av = get_lip_reading_model(get_ml_config()).availability()
+    assert av.state == AvailabilityState.MODEL_UNAVAILABLE
+    assert av.missing
+    assert "install" in (av.detail or "").lower() or "download" in (av.detail or "").lower()
 
 
 def test_get_unknown_video_404(client):

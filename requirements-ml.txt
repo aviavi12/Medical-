@@ -1,33 +1,37 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# SilentSpeak Lab — heavy ML runtimes. Install only when running real models.
-# Without these, the corresponding subsystems report MODEL_UNAVAILABLE with the
-# exact missing dependency (never fabricated output). See docs/model-selection.md.
+# SilentSpeak Lab — heavy ML runtimes for the REAL pipeline.
+# These exact pins are verified working together on CPU in this build
+# (Python 3.11). Without them the corresponding subsystems report
+# MODEL_UNAVAILABLE with the exact missing dependency — never fabricated output.
 #
-# GPU builds: install the CUDA/MPS-appropriate torch wheel from pytorch.org.
+# GPU: install a CUDA/MPS-matched torch wheel from pytorch.org instead of the
+# default; the code auto-detects and uses CUDA/MPS when available.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# --- shared ---
-torch>=2.2
-torchvision>=0.17
-onnxruntime>=1.17
+# --- core DL (pinned pair; the PyPI torch wheel is CUDA-enabled but runs on CPU) ---
+torch==2.2.2
+torchvision==0.17.2
 
-# --- person / face detection ---
-# AGPL-3.0 — review before distribution. See docs/model-selection.md for
-# permissively-licensed alternatives (YOLOX).
-ultralytics>=8.1
+# --- person detection (AGPL-3.0 — review before distribution) ---
+# yolo11 needs ultralytics>=8.3; we pin 8.2.x and use yolov8n weights.
+ultralytics==8.2.103
 
-# --- face detection / landmarks / iris ---
-mediapipe>=0.10
+# --- face detection + gaze landmarks (Apache-2.0) ---
+mediapipe==0.10.14
 
-# --- tracking (ByteTrack / BoT-SORT are typically vendored or pip-installed) ---
-# lap>=0.4
-# cython-bbox>=0.1
+# --- mouth-ROI alignment for LipNet (prebuilt wheel; no compiler needed) ---
+# The 68-landmark predictor .dat is fetched by scripts/download_models.py
+# (research-only license — see docs/live-ml-plan.md).
+dlib-bin>=19.24
 
-# --- lip reading (model repos usually require manual weight download) ---
-# av-hubert / auto_avsr are installed from source per their licenses.
+# --- evaluation metric (WER/CER edit distance) ---
+editdistance>=0.6
 
-# --- audio ASR for evaluation only (§45) ---
-# openai-whisper>=20231117
+# --- optional: ONNX export/runtime once correctness is established ---
+# onnxruntime>=1.17
 
-# --- TTS (generic voice) ---
+# --- optional: audio ASR for the evaluation-only comparison mode (§45) ---
+# openai-whisper>=20231117   # NEVER used as a substitute for visual lip reading
+
+# --- optional: local generic TTS (§42) ---
 # piper-tts>=1.2

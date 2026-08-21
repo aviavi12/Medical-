@@ -9,6 +9,17 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _models_dir() -> Path:
+    raw = os.environ.get("MODELS_DIR", "./models")
+    p = Path(raw)
+    if not p.is_absolute():
+        p = _REPO_ROOT / p
+    return p
 
 
 def _f(name: str, default: float) -> float:
@@ -80,16 +91,38 @@ class MLConfig:
     person_detector: str = field(default_factory=lambda: _s("PERSON_DETECTOR", "yolo"))
     face_detector: str = field(default_factory=lambda: _s("FACE_DETECTOR", "mediapipe"))
     tracker: str = field(default_factory=lambda: _s("TRACKER", "bytetrack"))
-    lip_reading_model: str = field(default_factory=lambda: _s("LIP_READING_MODEL", "avhubert"))
+    lip_reading_model: str = field(default_factory=lambda: _s("LIP_READING_MODEL", "lipnet"))
     tts_provider: str = field(default_factory=lambda: _s("TTS_PROVIDER", "local"))
     yolo_img_size: int = field(default_factory=lambda: _i("YOLO_IMG_SIZE", 1280))
+    models_dir: str = field(default_factory=lambda: str(_models_dir()))
     yolo_person_weights: str = field(default_factory=lambda: _s("YOLO_PERSON_WEIGHTS", ""))
     lip_reading_weights: str = field(default_factory=lambda: _s("LIP_READING_WEIGHTS", ""))
+    dlib_landmarks: str = field(default_factory=lambda: _s("DLIB_LANDMARKS", ""))
     coarse_fps: int = field(default_factory=lambda: _i("COARSE_FPS", 8))
     analysis_fps: int = field(default_factory=lambda: _i("ANALYSIS_FPS", 25))
     allow_mock: bool = field(default_factory=lambda: _s("ALLOW_MOCK_INFERENCE", "0") in ("1", "true", "True"))
     gates: QualityGates = field(default_factory=QualityGates)
     weights: ReadinessWeights = field(default_factory=ReadinessWeights)
+
+    def __post_init__(self) -> None:
+        # Derive default artifact paths from models_dir when env vars are unset,
+        # falling back to the file if it exists on disk.
+        md = Path(self.models_dir)
+        if not self.lip_reading_weights:
+            cand = md / "lipnet_overlap.pt"
+            self.lip_reading_weights = str(cand) if cand.exists() else ""
+        if not self.dlib_landmarks:
+            cand = md / "shape_predictor_68_face_landmarks.dat"
+            self.dlib_landmarks = str(cand) if cand.exists() else ""
+        if not self.yolo_person_weights:
+            # Prefer a locally-downloaded weight (offline, deterministic). yolov8n
+            # is compatible with the pinned ultralytics; yolo11n needs ultralytics>=8.3.
+            for cand in (md / "yolov8n.pt", md / "yolo11n.pt"):
+                if cand.exists():
+                    self.yolo_person_weights = str(cand)
+                    break
+            else:
+                self.yolo_person_weights = "yolov8n.pt"
 
 
 def get_ml_config() -> MLConfig:

@@ -8,10 +8,11 @@ requires-python = ">=3.11"
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-q"
-filterwarnings = ["ignore::DeprecationWarning"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::PendingDeprecationWarning"]
 markers = [
     "ml: tests that exercise ML interfaces (use mock adapters)",
     "integration: end-to-end pipeline tests",
+    "live: tests that require the downloaded real models (skipped otherwise)",
     "slow: slower tests",
 ]
 

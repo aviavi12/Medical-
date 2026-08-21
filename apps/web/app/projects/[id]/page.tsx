@@ -114,13 +114,25 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
             <Link href={`/projects/${videoId}/evaluation`} className="text-sm text-accent underline">
               Evaluation
             </Link>
-            {video && (
-              <span className="text-xs text-muted">
-                {video.metadata.width}×{video.metadata.height} ·{" "}
-                {video.metadata.has_audio ? "has audio" : "no audio"}
-              </span>
-            )}
           </div>
+
+          {/* Visual-only lip reading is the default and only mode: the audio track is
+              never passed to the ML pipeline (§14, §36, §37). */}
+          {video && (
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <span className="rounded-full border border-good px-2 py-1 text-good">
+                ✓ Visual-only lip reading
+              </span>
+              <span className="text-muted">
+                Audio detected: <strong>{video.metadata.has_audio ? "Yes" : "No"}</strong>
+                {video.metadata.has_audio && " (ignored — transcript is visual-only)"}
+              </span>
+              <span className="text-muted">
+                {video.metadata.width}×{video.metadata.height}
+                {video.metadata.fps ? ` · ${Math.round(video.metadata.fps)}fps` : ""}
+              </span>
+            </div>
+          )}
 
           {error && (
             <div className="rounded-md border border-bad bg-panel2 p-3 text-sm text-bad">⛔ {error}</div>

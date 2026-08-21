@@ -29,8 +29,27 @@ class InputContract:
 class LipReadingModel(ABC):
     name = "lip_reading"
 
+    # A model that can run its own frame-level preprocessing (face align → mouth
+    # ROI) sets this True and implements ``transcribe``. Models that only accept a
+    # prebuilt TemporalMouthSequence leave it False (the pipeline then uses the
+    # generic landmarker + MouthExtractor path).
+    supports_frame_transcription: bool = False
+
     def load(self) -> None:
         """Optional explicit load; adapters may lazy-load in __init__."""
+
+    def transcribe(self, frames):
+        """Real path from raw frames: [(timestamp, bgr_frame, face_roi|None), ...]
+        → LipReadingResult. Default: not supported."""
+        from ml.common.results import model_unavailable
+        from ml.common.types import LipReadingResult
+
+        return LipReadingResult(
+            availability=model_unavailable(
+                "This lip-reading model has no frame-level preprocessor.", []
+            ),
+            segments=[],
+        )
 
     @abstractmethod
     def input_contract(self) -> InputContract: ...
@@ -55,12 +74,16 @@ def get_lip_reading_model(config: MLConfig | None = None) -> LipReadingModel:
         return MockLipReadingModel()
 
     name = config.lip_reading_model
+    if name == "lipnet":
+        from ml.lipreading.adapters.lipnet_adapter import LipNetAdapter
+
+        return LipNetAdapter(config)
     if name == "avhubert":
         from ml.lipreading.adapters.avhubert_adapter import AVHubertAdapter
 
         return AVHubertAdapter(config)
 
-    # Unknown/other model requested but not wired.
-    from ml.lipreading.adapters.avhubert_adapter import AVHubertAdapter
+    # Default to the real, runnable LipNet adapter.
+    from ml.lipreading.adapters.lipnet_adapter import LipNetAdapter
 
-    return AVHubertAdapter(config)
+    return LipNetAdapter(config)

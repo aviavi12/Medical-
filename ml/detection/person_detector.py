@@ -57,9 +57,15 @@ class YoloPersonDetector(PersonDetector):
         )
 
     def _build(self, weights: str):  # pragma: no cover - requires ultralytics
+        import os
+
+        # Prevent ultralytics from hitting the network (blocked api.github.com) or
+        # auto-installing packages, which can corrupt the environment.
+        os.environ.setdefault("YOLO_OFFLINE", "true")
+        os.environ.setdefault("YOLO_AUTOINSTALL", "false")
         from ultralytics import YOLO  # type: ignore
 
-        model = YOLO(weights)
+        model = YOLO(weights)  # loads a local .pt directly, no download
         return model
 
     def availability(self) -> Availability:  # pragma: no cover - requires ultralytics

@@ -21,8 +21,20 @@ install: venv ## Install core backend + CV deps
 	$(PIP) install -r requirements.txt
 
 .PHONY: install-ml
-install-ml: ## Install heavy ML runtimes (torch, ultralytics, mediapipe, ...)
+install-ml: ## Install heavy ML runtimes (torch, ultralytics, mediapipe, dlib, ...)
 	$(PIP) install -r requirements-ml.txt
+
+.PHONY: download-models
+download-models: ## Download real model weights + GRID fixtures into ./models
+	$(PYTHON) scripts/download_models.py
+
+.PHONY: demo
+demo: ## One-command real lip-reading demo on a labeled GRID clip
+	$(PYTHON) scripts/demo.py $(ARGS)
+
+.PHONY: lipread
+lipread: ## Run real lip reading on your video: make lipread ARGS="--video x.mp4"
+	$(PYTHON) scripts/run_real_lipreading.py $(ARGS)
 
 .PHONY: web-install
 web-install: ## Install frontend deps

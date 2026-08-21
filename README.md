@@ -13,6 +13,37 @@ text-to-speech — all synchronized to a timeline.
 > `MODEL_UNAVAILABLE` (naming the exact missing dependency), `LOW_CONFIDENCE` (masked as
 > `[uncertain]`), or `NO_SIGNAL`. See [`docs/limitations.md`](docs/limitations.md).
 
+## ✅ Real, working lip reading (not a mock)
+
+The core pipeline runs **real models end to end** — a no-audio English video is transcribed
+from mouth movement alone by a real English visual speech recognition model (**LipNet**, GRID),
+with rigorous evaluation:
+
+| Split | WER | CER | Sentence accuracy | Speed (CPU) |
+|-------|-----|-----|-------------------|-------------|
+| overlap (default) | **0.017** | **0.004** | **90%** (9/10) | ~0.09 s / 3-s clip |
+| unseen speakers | 0.017 | 0.005 | 90% | ~0.08 s / clip |
+
+Try it in one command (audio is stripped first, proving the transcript is visual-only):
+
+```bash
+make install && make install-ml && make download-models
+make demo
+# → "BIN BLUE AT F TWO NOW"  (= ground truth, WER 0.000)
+```
+
+Models used: **LipNet-GRID** (Fengdalu/LipNet-PyTorch, MIT) for visual speech recognition,
+**dlib-68** for mouth alignment (research-only license), **MediaPipe** (Apache-2.0) for face
+detection + gaze landmarks, **YOLOv8n** (Ultralytics, AGPL-3.0) for person detection. Full
+details, sources, licenses, and measured results: [`docs/live-ml-plan.md`](docs/live-ml-plan.md)
+and [`docs/lipreading-model-comparison.md`](docs/lipreading-model-comparison.md).
+
+> **Scope:** the shipped checkpoint is trained on GRID's 6-word command grammar — the "suitable
+> English video" domain. It is not yet an open-vocabulary conversational lip reader; upgrading to
+> AV-HuBERT/Auto-AVSR is a drop-in adapter once those weights are reachable (their hosts are
+> blocked by this environment's egress policy). The app reports `MODEL_UNAVAILABLE`/`NO_SIGNAL`
+> rather than hallucinating out-of-domain speech.
+
 ---
 
 ## Architecture
@@ -105,11 +136,18 @@ obviously-synthetic placeholders and can never surface as a production result.
 
 ## Running inference (real models)
 
-1. `make install-ml`
-2. Download model weights (see [`docs/model-selection.md`](docs/model-selection.md)) and set the
-   matching env vars (`YOLO_PERSON_WEIGHTS`, `LIP_READING_WEIGHTS`, …).
-3. Restart the API. Any subsystem still missing a dependency reports `MODEL_UNAVAILABLE` with the
-   exact gap — it will not fake results.
+```bash
+make install-ml         # torch, torchvision, ultralytics, mediapipe, dlib-bin
+make download-models    # LipNet + dlib-68 + yolov8n + GRID fixtures → ./models
+python scripts/demo.py                                   # one-command real demo
+python scripts/run_real_lipreading.py --video my.mp4 --output results/
+pytest tests/live -m live                                # real WER + no-audio acceptance
+```
+
+Weights auto-resolve from `MODELS_DIR` (default `./models`); override with
+`LIP_READING_WEIGHTS`, `DLIB_LANDMARKS`, `YOLO_PERSON_WEIGHTS` if needed. Any subsystem still
+missing a dependency reports `MODEL_UNAVAILABLE` with the exact gap — it never fakes results.
+See [`docs/live-ml-plan.md`](docs/live-ml-plan.md).
 
 ## Training & evaluation
 

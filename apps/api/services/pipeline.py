@@ -25,7 +25,7 @@ from database import models
 from ml.association import associate
 from ml.common.config import MLConfig
 from ml.common.sampling import FrameSampler
-from ml.common.types import BBox
+from ml.common.types import BBox, PersonDetection
 from ml.detection import get_face_detector, get_person_detector
 from ml.gaze import get_gaze_estimator
 from ml.landmarks import get_landmarker
@@ -93,18 +93,21 @@ def run_coarse_scan(
     db.commit()
 
     detector = get_person_detector(config)
-    av = detector.availability()
-    if not av.is_available:
-        # Honest failure: name the exact missing dependency (§64, §93).
-        _set_job(db, job, status="FAILED", stage="DETECTING_PEOPLE", error=av.detail)
+    # Gate on the FACE detector: a visible, trackable face is what lip reading
+    # needs (a person seen only from behind cannot be lip-read). Person detection
+    # (YOLO) runs best-effort for context; it does not gate gallery creation, so
+    # head-and-shoulders / close-up footage still yields selectable people.
+    face_detector = get_face_detector(config)
+    face_av = face_detector.availability()
+    if not face_av.is_available:
+        _set_job(db, job, status="FAILED", stage="DETECTING_FACES", error=face_av.detail)
         video.status = "FAILED"
         db.add(video)
         db.commit()
-        logger.warning("person detector unavailable", extra={"video_id": video.id, "error": av.detail})
+        logger.warning("face detector unavailable", extra={"video_id": video.id, "error": face_av.detail})
         return job
 
-    face_detector = get_face_detector(config)
-    face_available = face_detector.availability().is_available
+    person_available = detector.availability().is_available
     tracker = get_tracker(config)
     quality = get_quality_estimator(config)
     sampler = FrameSampler(config.coarse_fps)
@@ -114,21 +117,25 @@ def run_coarse_scan(
     pending_faces: list[tuple[int, models.FaceObservation]] = []
     total_samples = 0
 
-    _set_job(db, job, status="DETECTING_PEOPLE", stage="DETECTING_PEOPLE", progress=0.05)
+    _set_job(db, job, status="DETECTING_FACES", stage="DETECTING_FACES", progress=0.05)
 
     try:
         for sf in sampler.iter_frames(str(path), video.id, decode=True):
             total_samples += 1
-            persons = detector.detect(sf.image, sf.source_frame_index, sf.timestamp_seconds)
-            tracks = tracker.update(persons, sf.source_frame_index, sf.timestamp_seconds)
-            faces = face_detector.detect(sf.image, sf.source_frame_index, sf.timestamp_seconds) if face_available else []
-            assoc = associate(faces, tracks)
-
-            # Map track_id -> associated face bbox (if any).
-            track_face: dict[int, BBox] = {}
-            for a in assoc:
-                if a.person_track_id is not None and not a.uncertain:
-                    track_face[a.person_track_id] = faces[a.face_index].bbox
+            faces = face_detector.detect(sf.image, sf.source_frame_index, sf.timestamp_seconds)
+            # Each tracked face is treated as a person for the gallery.
+            face_dets = [
+                PersonDetection(bbox=f.bbox, confidence=f.confidence,
+                                frame_index=sf.source_frame_index, timestamp=sf.timestamp_seconds)
+                for f in faces
+            ]
+            tracks = tracker.update(face_dets, sf.source_frame_index, sf.timestamp_seconds)
+            # Best-effort person detection (context/debug only; never gates).
+            if person_available:
+                try:
+                    detector.detect(sf.image, sf.source_frame_index, sf.timestamp_seconds)
+                except Exception:
+                    pass
 
             for t in tracks:
                 agg = aggregates[t.track_id]
@@ -139,35 +146,34 @@ def run_coarse_scan(
                 agg.last_ts = sf.timestamp_seconds
                 agg.det_conf.append(t.confidence)
 
-                fbbox = track_face.get(t.track_id)
-                if fbbox is not None:
-                    fq = quality.score(sf.image, fbbox)
-                    agg.face_quality.append(fq.score)
-                    agg.face_width.append(fq.face_width)
-                    agg.mouth_vis.append(fq.mouth_visibility)
-                    agg.sharpness.append(fq.sharpness)
-                    agg.pose.append(fq.pose_score)
-                    if fq.score > agg.best_quality:
-                        agg.best_quality = fq.score
-                        agg.best_ts = sf.timestamp_seconds
-                        agg.best_face_bbox = fbbox.as_list()
-                    obs = models.FaceObservation(
-                        person_track_id="",  # filled after tracks persisted
-                        timestamp=sf.timestamp_seconds,
-                        frame_index=sf.source_frame_index,
-                        bbox=fbbox.as_list(),
-                        confidence=faces_conf(faces, fbbox),
-                        width=fq.face_width,
-                        height=fq.face_height,
-                        blur_score=fq.blur,
-                        brightness_score=fq.brightness,
-                        pose_score=fq.pose_score,
-                        mouth_visibility=fq.mouth_visibility,
-                        eye_visibility=fq.eye_visibility,
-                        occlusion_score=fq.occlusion,
-                        quality_score=fq.score,
-                    )
-                    pending_faces.append((t.track_id, obs))
+                fbbox = t.bbox  # the tracked face box
+                fq = quality.score(sf.image, fbbox)
+                agg.face_quality.append(fq.score)
+                agg.face_width.append(fq.face_width)
+                agg.mouth_vis.append(fq.mouth_visibility)
+                agg.sharpness.append(fq.sharpness)
+                agg.pose.append(fq.pose_score)
+                if fq.score > agg.best_quality:
+                    agg.best_quality = fq.score
+                    agg.best_ts = sf.timestamp_seconds
+                    agg.best_face_bbox = fbbox.as_list()
+                obs = models.FaceObservation(
+                    person_track_id="",  # filled after tracks persisted
+                    timestamp=sf.timestamp_seconds,
+                    frame_index=sf.source_frame_index,
+                    bbox=fbbox.as_list(),
+                    confidence=t.confidence,
+                    width=fq.face_width,
+                    height=fq.face_height,
+                    blur_score=fq.blur,
+                    brightness_score=fq.brightness,
+                    pose_score=fq.pose_score,
+                    mouth_visibility=fq.mouth_visibility,
+                    eye_visibility=fq.eye_visibility,
+                    occlusion_score=fq.occlusion,
+                    quality_score=fq.score,
+                )
+                pending_faces.append((t.track_id, obs))
     except Exception as exc:  # pragma: no cover - defensive
         _set_job(db, job, status="FAILED", stage="DETECTING_PEOPLE", error=str(exc))
         video.status = "FAILED"
@@ -279,6 +285,54 @@ def _save_thumbnail(storage, video_path, video_id, track_id, timestamp, face_bbo
         return None
 
 
+def _interp_roi(roi_index: list[tuple[float, list]], ts: float) -> list | None:
+    """Linear-interpolate a person's face bbox at time ``ts`` from coarse-scan
+    observations, so Stage-B 25fps frames can be tied to the selected person."""
+    if not roi_index:
+        return None
+    if ts <= roi_index[0][0]:
+        return roi_index[0][1]
+    if ts >= roi_index[-1][0]:
+        return roi_index[-1][1]
+    for i in range(1, len(roi_index)):
+        t0, b0 = roi_index[i - 1]
+        t1, b1 = roi_index[i]
+        if t0 <= ts <= t1:
+            if t1 == t0:
+                return b0
+            a = (ts - t0) / (t1 - t0)
+            return [b0[j] + (b1[j] - b0[j]) * a for j in range(4)]
+    return roi_index[-1][1]
+
+
+def _stream_person_crops(path, face_obs, person, model, config):
+    """Re-sample the selected person at analysis FPS (lip-reading models need
+    their trained FPS, e.g. 25) and stream aligned mouth crops. Only the small
+    128x64 crops are kept in memory, not full frames."""
+    fps = float(config.analysis_fps or 25)
+    roi_index = [(fo.timestamp, fo.bbox) for fo in face_obs]
+    first_ts = person.first_timestamp if person.first_timestamp is not None else (roi_index[0][0] if roi_index else 0.0)
+    last_ts = person.last_timestamp if person.last_timestamp is not None else (roi_index[-1][0] if roi_index else 0.0)
+    pre = model.preprocessor
+    crops: list = []
+    tss: list[float] = []
+    for sf in FrameSampler(fps).iter_frames(str(path), decode=True):
+        ts = sf.timestamp_seconds
+        if ts < first_ts - 0.2:
+            continue
+        if ts > last_ts + 0.2:
+            break
+        roi = _interp_roi(roi_index, ts)
+        try:
+            m = pre.mouth_crop(sf.image, roi)
+        except Exception:
+            m = None
+        if m is not None:
+            crops.append(m.crop)
+            tss.append(ts)
+    return crops, tss
+
+
 def run_person_analysis(
     db: Session,
     video: models.Video,
@@ -364,9 +418,18 @@ def run_person_analysis(
     contract = model.input_contract()
     lip_av = model.availability()
     segments_written = 0
-    if lip_av.is_available and crops:
+    result = None
+    if getattr(model, "supports_frame_transcription", False) and lip_av.is_available:
+        # Real path (e.g. LipNet): re-sample the person at the model's FPS and run
+        # the model's own mouth-ROI preprocessing over real frames.
+        mouth_crops, mouth_ts = _stream_person_crops(path, face_obs, person, model, config)
+        result = model.transcribe_crops(mouth_crops, mouth_ts)
+    elif lip_av.is_available and crops:
+        # Generic/mock path: prebuilt mouth sequence from landmarker + MouthExtractor.
         sequence = build_sequence(crops, contract.required_fps, contract.sequence_length)
         result = run_inference(model, [sequence])
+
+    if result is not None and result.availability.is_available:
         mv = _persist_model_version(db, model)
         for seg in result.segments:
             row = models.LipReadingSegment(
@@ -389,6 +452,10 @@ def run_person_analysis(
             segments_written += 1
         state = "REAL_RESULT"
         detail = None
+    elif result is not None:
+        # Real model ran but returned a non-real state (NO_SIGNAL / unavailable).
+        state = result.availability.state.value
+        detail = result.availability.detail
     else:
         state = "MODEL_UNAVAILABLE"
         detail = lip_av.detail or (lm_av.detail if not lm_av.is_available else "No mouth crops available.")

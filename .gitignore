@@ -27,13 +27,21 @@ apps/web/out/
 apps/web/next-env.d.ts
 .turbo/
 
-# ML weights / checkpoints (never commit large binaries)
+# ML weights / checkpoints (never commit large binaries) — fetched by scripts/download_models.py
 training/checkpoints/
+models/
 *.pt
 *.pth
 *.onnx
 *.task
 *.tflite
+*.dat
+
+# Downloaded test fixtures (redistributable but reconstructed by download_models.py)
+tests/fixtures/visual_speech/grid/*.mpg
+
+# CLI/demo outputs
+results/
 
 # OS / editor
 .DS_Store
