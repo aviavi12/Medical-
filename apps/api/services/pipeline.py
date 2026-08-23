@@ -313,7 +313,6 @@ def _stream_person_crops(path, face_obs, person, model, config):
     roi_index = [(fo.timestamp, fo.bbox) for fo in face_obs]
     first_ts = person.first_timestamp if person.first_timestamp is not None else (roi_index[0][0] if roi_index else 0.0)
     last_ts = person.last_timestamp if person.last_timestamp is not None else (roi_index[-1][0] if roi_index else 0.0)
-    pre = model.preprocessor
     crops: list = []
     tss: list[float] = []
     for sf in FrameSampler(fps).iter_frames(str(path), decode=True):
@@ -324,11 +323,13 @@ def _stream_person_crops(path, face_obs, person, model, config):
             break
         roi = _interp_roi(roi_index, ts)
         try:
-            m = pre.mouth_crop(sf.image, roi)
+            # Uniform, model-specific per-frame crop; only the small crop is kept
+            # in memory (not the full frame), so long videos stay bounded.
+            crop = model.crop_for_frame(sf.image, roi)
         except Exception:
-            m = None
-        if m is not None:
-            crops.append(m.crop)
+            crop = None
+        if crop is not None:
+            crops.append(crop)
             tss.append(ts)
     return crops, tss
 

@@ -32,6 +32,7 @@ def with_mock(monkeypatch):
 
 # ── MODEL_UNAVAILABLE is honest and names the gap (forced via missing weights) ──
 def test_lipnet_unavailable_when_weights_missing(no_mock, monkeypatch):
+    monkeypatch.setenv("LIP_READING_MODEL", "lipnet")
     monkeypatch.setenv("MODELS_DIR", "/nonexistent-models-dir")
     monkeypatch.setenv("LIP_READING_WEIGHTS", "/nonexistent/lipnet.pt")
     monkeypatch.setenv("DLIB_LANDMARKS", "/nonexistent/pred.dat")
@@ -118,7 +119,8 @@ def get_lip_reading_model_or_skip(cfg):
 
 # ── Real models are available when the weights are present ──
 @pytest.mark.skipif(not HAVE_LIPNET, reason="LipNet weights not downloaded")
-def test_lipnet_real_when_weights_present(no_mock):
+def test_lipnet_real_when_weights_present(no_mock, monkeypatch):
+    monkeypatch.setenv("LIP_READING_MODEL", "lipnet")  # benchmark model
     from ml.common.config import get_ml_config
     from ml.lipreading import get_lip_reading_model
 

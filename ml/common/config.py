@@ -91,13 +91,19 @@ class MLConfig:
     person_detector: str = field(default_factory=lambda: _s("PERSON_DETECTOR", "yolo"))
     face_detector: str = field(default_factory=lambda: _s("FACE_DETECTOR", "mediapipe"))
     tracker: str = field(default_factory=lambda: _s("TRACKER", "bytetrack"))
-    lip_reading_model: str = field(default_factory=lambda: _s("LIP_READING_MODEL", "lipnet"))
+    # Production default is open-vocabulary (SyncVSR). GRID-LipNet is retained as
+    # a benchmark/regression model (select with LIP_READING_MODEL=lipnet).
+    lip_reading_model: str = field(default_factory=lambda: _s("LIP_READING_MODEL", "syncvsr"))
     tts_provider: str = field(default_factory=lambda: _s("TTS_PROVIDER", "local"))
     yolo_img_size: int = field(default_factory=lambda: _i("YOLO_IMG_SIZE", 1280))
     models_dir: str = field(default_factory=lambda: str(_models_dir()))
     yolo_person_weights: str = field(default_factory=lambda: _s("YOLO_PERSON_WEIGHTS", ""))
     lip_reading_weights: str = field(default_factory=lambda: _s("LIP_READING_WEIGHTS", ""))
     dlib_landmarks: str = field(default_factory=lambda: _s("DLIB_LANDMARKS", ""))
+    # Open-vocabulary (SyncVSR) settings
+    openvocab_weights: str = field(default_factory=lambda: _s("OPENVOCAB_WEIGHTS", ""))
+    openvocab_crop_mode: str = field(default_factory=lambda: _s("OPENVOCAB_CROP_MODE", "lower_face"))
+    openvocab_beam_size: int = field(default_factory=lambda: _i("OPENVOCAB_BEAM_SIZE", 10))
     coarse_fps: int = field(default_factory=lambda: _i("COARSE_FPS", 8))
     analysis_fps: int = field(default_factory=lambda: _i("ANALYSIS_FPS", 25))
     allow_mock: bool = field(default_factory=lambda: _s("ALLOW_MOCK_INFERENCE", "0") in ("1", "true", "True"))
@@ -114,6 +120,9 @@ class MLConfig:
         if not self.dlib_landmarks:
             cand = md / "shape_predictor_68_face_landmarks.dat"
             self.dlib_landmarks = str(cand) if cand.exists() else ""
+        if not self.openvocab_weights:
+            cand = md / "syncvsr_vox_lrs2_lrs3.ckpt"
+            self.openvocab_weights = str(cand) if cand.exists() else ""
         if not self.yolo_person_weights:
             # Prefer a locally-downloaded weight (offline, deterministic). yolov8n
             # is compatible with the pinned ultralytics; yolo11n needs ultralytics>=8.3.

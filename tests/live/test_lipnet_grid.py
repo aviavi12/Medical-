@@ -34,6 +34,8 @@ pytestmark = [
 def _force_real_inference(monkeypatch):
     # conftest enables mock ML globally; live tests must exercise the real models.
     monkeypatch.setenv("ALLOW_MOCK_INFERENCE", "0")
+    # GRID-LipNet is the benchmark/regression model (production default is open-vocab).
+    monkeypatch.setenv("LIP_READING_MODEL", "lipnet")
 
 _CMD = {"b": "bin", "l": "lay", "p": "place", "s": "set"}
 _COL = {"b": "blue", "g": "green", "r": "red", "w": "white"}

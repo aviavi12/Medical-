@@ -51,6 +51,13 @@ class LipReadingModel(ABC):
             segments=[],
         )
 
+    def crop_for_frame(self, frame, roi=None):
+        """Return this model's per-frame crop (model-specific array) for one BGR
+        frame, restricted to ``roi`` (a face bbox) if given, or None if no usable
+        face. Enables memory-bounded streaming in the pipeline: the caller keeps
+        only the small crops, not full frames. Pair with ``transcribe_crops``."""
+        return None
+
     @abstractmethod
     def input_contract(self) -> InputContract: ...
 
@@ -74,7 +81,11 @@ def get_lip_reading_model(config: MLConfig | None = None) -> LipReadingModel:
         return MockLipReadingModel()
 
     name = config.lip_reading_model
-    if name == "lipnet":
+    if name in ("syncvsr", "openvocab", "open_vocabulary"):
+        from ml.lipreading.adapters.openvocab_adapter import OpenVocabularyLipReadingModel
+
+        return OpenVocabularyLipReadingModel(config)
+    if name in ("lipnet", "grid"):
         from ml.lipreading.adapters.lipnet_adapter import LipNetAdapter
 
         return LipNetAdapter(config)
@@ -83,7 +94,7 @@ def get_lip_reading_model(config: MLConfig | None = None) -> LipReadingModel:
 
         return AVHubertAdapter(config)
 
-    # Default to the real, runnable LipNet adapter.
-    from ml.lipreading.adapters.lipnet_adapter import LipNetAdapter
+    # Default to the real, runnable open-vocabulary adapter (production).
+    from ml.lipreading.adapters.openvocab_adapter import OpenVocabularyLipReadingModel
 
-    return LipNetAdapter(config)
+    return OpenVocabularyLipReadingModel(config)

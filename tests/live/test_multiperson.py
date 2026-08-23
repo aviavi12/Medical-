@@ -45,6 +45,7 @@ def grid_truth(code: str) -> str:
 @pytest.fixture(autouse=True)
 def _real(monkeypatch):
     monkeypatch.setenv("ALLOW_MOCK_INFERENCE", "0")
+    monkeypatch.setenv("LIP_READING_MODEL", "lipnet")  # benchmark model for isolation test
     monkeypatch.setenv("COARSE_FPS", "8")
     monkeypatch.setenv("ANALYSIS_FPS", "25")
 

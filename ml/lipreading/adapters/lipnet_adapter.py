@@ -110,6 +110,11 @@ class LipNetAdapter(LipReadingModel):
         assert self._preprocessor is not None
         return self._preprocessor
 
+    def crop_for_frame(self, frame, roi=None):
+        self._ensure_loaded()
+        m = self._preprocessor.mouth_crop(frame, roi)  # type: ignore[union-attr]
+        return m.crop if m is not None else None
+
     # ── inference ────────────────────────────────────────────────────────────
     def _infer_window(self, crops: list[Any], timestamps: list[float]) -> LipReadingSegment:
         import numpy as np  # type: ignore
