@@ -1,9 +1,9 @@
 # SilentSpeak Lab API image.
 FROM python:3.11-slim
 
-# FFmpeg for real video metadata/frames; libgl/libglib for OpenCV + MediaPipe.
+# FFmpeg for video; libgl/libglib for OpenCV + MediaPipe; espeak-ng for generic TTS.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg libgl1 libglib2.0-0 \
+    && apt-get install -y --no-install-recommends ffmpeg libgl1 libglib2.0-0 espeak-ng \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

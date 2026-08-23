@@ -15,8 +15,8 @@ licenses, and procedures behind it.
 | Landmarks (gaze) | ✅ REAL | MediaPipe Face Mesh (468 + iris) | Head pose + gaze |
 | Mouth ROI (lip reading) | ✅ REAL | dlib-68 → Procrustes align → 128×64 | Matches LipNet training distribution |
 | **Visual speech recognition** | ✅ **REAL** | **LipNet (GRID), PyTorch** | **Measured WER 0.017 / CER 0.004 on labeled GRID** |
-| Gaze estimation | ✅ REAL | Geometric (head pose + iris) | Approximate, reported as "possible" |
-| TTS | ⬜ MODEL_UNAVAILABLE | Piper (not installed) | Generic-voice seam; honest unavailable |
+| Gaze estimation | ✅ REAL | Geometric (head pose + iris) | Approximate; multi-person "possible target" wired (§35) |
+| TTS | ✅ REAL | eSpeak NG (generic voice) | Offline, no weights; Piper is the neural upgrade when reachable |
 
 **Verified end to end:** a no-audio English video → face detection → tracking →
 person selection → mouth ROI → 25fps temporal sequence → real LipNet → timestamped

@@ -43,8 +43,8 @@ export default function SettingsPage() {
             <li>Person detector: YOLO (configurable IMG_SIZE)</li>
             <li>Face detector: MediaPipe / YOLO-face (benchmark-selected)</li>
             <li>Tracker: ByteTrack / BoT-SORT (IoU fallback)</li>
-            <li>Lip reading: AV-HuBERT (English VSR, non-commercial license)</li>
-            <li>TTS: Piper (generic voice)</li>
+            <li>Lip reading: LipNet-GRID (real English VSR, MIT) — WER 0.017 measured</li>
+            <li>TTS: eSpeak NG (generic voice); Piper is the neural upgrade</li>
           </ul>
         </div>
       </main>

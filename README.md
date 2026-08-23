@@ -83,6 +83,8 @@ docs/       documentation
 - Python 3.11+
 - Node 20+ (for the frontend)
 - FFmpeg (`ffmpeg` + `ffprobe` on PATH) — required for real video metadata & frames
+- For the real ML pipeline: system libs `libgl1 libglib2.0-0` (OpenCV/MediaPipe) and
+  `espeak-ng` (generic TTS) — `sudo apt-get install -y ffmpeg libgl1 libglib2.0-0 espeak-ng`
 - PostgreSQL (optional; SQLite is used automatically when `DATABASE_URL` is unset)
 - Optional GPU (CUDA) or Apple Silicon (MPS) — CPU is a supported fallback
 - Optional heavy ML runtimes (`requirements-ml.txt`) for the real models

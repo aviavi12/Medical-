@@ -383,6 +383,23 @@ def run_person_analysis(
     path = storage.local_path(video.storage_path) if not str(video.storage_path).startswith("/") else video.storage_path
     sampler = FrameSampler(1.0)
 
+    # Other people's face boxes over time, for "possible gaze toward another
+    # person" estimation (§35). Reported as possible, never as certainty.
+    others_roi: list[tuple[str, list[tuple[float, list]]]] = []
+    for other in (
+        db.query(models.PersonTrack)
+        .filter(models.PersonTrack.video_id == video.id, models.PersonTrack.id != person.id)
+        .all()
+    ):
+        oobs = (
+            db.query(models.FaceObservation)
+            .filter(models.FaceObservation.person_track_id == other.id)
+            .order_by(models.FaceObservation.timestamp)
+            .all()
+        )
+        if oobs:
+            others_roi.append((other.id, [(o.timestamp, o.bbox) for o in oobs]))
+
     crops = []
     gaze_rows: list[models.GazeObservation] = []
     if lm_av.is_available:
@@ -398,6 +415,18 @@ def run_person_analysis(
             if crop is not None:
                 crops.append(crop)
             g = gaze.estimate(landmarks, fo.timestamp)
+
+            target_id: str | None = None
+            target_conf = 0.0
+            if others_roi:
+                others_now = []
+                for oid, idx in others_roi:
+                    b = _interp_roi(idx, fo.timestamp)
+                    if b is not None:
+                        others_now.append((oid, BBox.from_list(b)))
+                if others_now:
+                    target_id, target_conf = gaze.gaze_toward(bbox, g, others_now)
+
             gaze_rows.append(
                 models.GazeObservation(
                     person_track_id=person.id,
@@ -407,6 +436,8 @@ def run_person_analysis(
                     pitch=g.head_pose.pitch if g.head_pose else None,
                     roll=g.head_pose.roll if g.head_pose else None,
                     confidence=g.confidence,
+                    target_person_id=target_id,
+                    target_confidence=target_conf,
                 )
             )
 

@@ -67,18 +67,32 @@ def get_tts_provider(config: MLConfig | None = None) -> TextToSpeechProvider:
 
         return MockTTS()
 
-    if config.tts_provider == "local":
+    if config.tts_provider in ("local", "piper"):
+        # Prefer Piper (neural, higher quality) when installed; otherwise use the
+        # dependable, fully-offline eSpeak NG generic voice.
         try:
             import piper  # type: ignore  # noqa: F401
-        except Exception:
-            return UnavailableTTS(
-                "Local TTS (Piper) is not installed. Install piper-tts + a voice model. "
-                "See docs/model-selection.md.",
-                ["piper-tts", "voice model"],
-            )
-        from ml.tts.providers.piper_provider import PiperTTS  # pragma: no cover
 
-        return PiperTTS(config)  # pragma: no cover
+            from ml.tts.providers.piper_provider import PiperTTS  # pragma: no cover
+
+            return PiperTTS(config)  # pragma: no cover
+        except Exception:
+            pass
+        from ml.tts.providers.espeak_provider import EspeakTTS
+
+        provider = EspeakTTS()
+        if provider.availability().is_available:
+            return provider
+        return UnavailableTTS(
+            "No local TTS available. Install espeak-ng (apt-get install espeak-ng) "
+            "or piper-tts + a voice model. See docs/model-selection.md.",
+            ["espeak-ng", "piper-tts"],
+        )
+
+    if config.tts_provider == "espeak":
+        from ml.tts.providers.espeak_provider import EspeakTTS
+
+        return EspeakTTS()
 
     return UnavailableTTS(
         f"TTS provider '{config.tts_provider}' is not configured.", [config.tts_provider]

@@ -48,13 +48,43 @@ def test_lipnet_unavailable_when_weights_missing(no_mock, monkeypatch):
     assert model.predict(TemporalMouthSequence(crops=[])).segments == []
 
 
-def test_tts_unavailable_when_piper_absent(no_mock):
-    # Piper is not installed in this environment → honest MODEL_UNAVAILABLE.
+def test_tts_unavailable_for_unknown_provider(no_mock, monkeypatch):
+    # An unconfigured provider reports MODEL_UNAVAILABLE (deterministic).
+    monkeypatch.setenv("TTS_PROVIDER", "does-not-exist")
     from ml.common.config import get_ml_config
     from ml.tts import get_tts_provider
 
-    av = get_tts_provider(get_ml_config()).availability()
-    assert av.state == AvailabilityState.MODEL_UNAVAILABLE
+    assert get_tts_provider(get_ml_config()).availability().state == AvailabilityState.MODEL_UNAVAILABLE
+
+
+def test_tts_espeak_real_when_installed(no_mock, tmp_path):
+    # eSpeak NG is a real, offline generic voice; available when the binary is present.
+    import shutil
+    import wave
+
+    import pytest as _pytest
+
+    from ml.common.config import get_ml_config
+    from ml.tts import get_tts_provider
+    from ml.tts.base import VoicePermissionError
+
+    provider = get_tts_provider(get_ml_config())
+    av = provider.availability()
+    if not (shutil.which("espeak-ng") or shutil.which("espeak")):
+        assert av.state == AvailabilityState.MODEL_UNAVAILABLE
+        return
+
+    assert av.state == AvailabilityState.REAL_RESULT
+    # Transcript → real synthetic audio (M13).
+    out = tmp_path / "out.wav"
+    art = provider.synthesize("bin blue at f two now", out, voice="generic")
+    assert out.exists() and out.stat().st_size > 0
+    with wave.open(str(out)) as wf:
+        assert wf.getnframes() > 0  # real audio, not silence-only
+    assert "Synthetic audio" in art.label
+    # A non-generic voice requires explicit permission (§43).
+    with _pytest.raises(VoicePermissionError):
+        provider.synthesize("x", out, voice="someone_real", authorized_voice_confirmation=False)
 
 
 # ── Mock adapters only with the flag, and never look like real transcripts ──

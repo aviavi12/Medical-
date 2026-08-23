@@ -103,9 +103,9 @@ where someone was looking.
 
 | Field | Value |
 |-------|-------|
-| Default | Piper (rhasspy/piper) — local, MIT, generic English voice |
-| License | MIT |
-| Safety | **Never** clones a voice from an uploaded video by default. Any future authorized voice profile requires explicit user confirmation of permission. All output labelled *"Synthetic audio generated from visual transcript."* |
+| Default (working) | **eSpeak NG** — local, GPL-3.0, generic English voice, fully offline (no weights). Robotic but real synthesized speech. |
+| Neural upgrade | Piper (rhasspy/piper, MIT) — higher quality; its voice models are on HuggingFace, **blocked by this environment's egress policy**, so it is the documented upgrade rather than the default here. |
+| Safety | **Never** clones a voice from an uploaded video by default. Any future authorized voice profile requires explicit user confirmation of permission (`VoicePermissionError` otherwise). All output labelled *"Synthetic audio generated from visual transcript."* |
 
 ## 9. Optional audio ASR (evaluation only, §45)
 
