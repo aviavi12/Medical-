@@ -28,6 +28,9 @@ MODELS_DIR = Path(os.environ.get("MODELS_DIR", REPO_ROOT / "models"))
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "visual_speech" / "grid"
 
 YOLO_URL = "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt"
+SYNCVSR_URL = ("https://github.com/KAIST-AILab/SyncVSR/releases/download/"
+               "weight-audio-v1/Vox%2BLRS2%2BLRS3.ckpt")
+SYNCVSR_MIN_BYTES = 1_000_000_000  # ~1.14 GB expected
 
 
 def _run(cmd: list[str]) -> None:
@@ -51,6 +54,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Download SilentSpeak Lab model weights")
     ap.add_argument("--force", action="store_true", help="re-download even if present")
     ap.add_argument("--skip-fixtures", action="store_true", help="don't fetch GRID test clips")
+    ap.add_argument("--skip-openvocab", action="store_true", help="don't fetch the 1.14GB SyncVSR checkpoint")
     args = ap.parse_args()
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -84,6 +88,21 @@ def main() -> int:
         else:
             _run(["curl", "-sSL", "-o", str(yolo_dst), YOLO_URL])
             print(f"  ↓ yolov8n.pt ({yolo_dst.stat().st_size // 1024} KB)")
+
+        if not args.skip_openvocab:
+            print("SyncVSR open-vocabulary VSR checkpoint (~1.14 GB, MIT):")
+            ov_dst = MODELS_DIR / "syncvsr_vox_lrs2_lrs3.ckpt"
+            if ov_dst.exists() and ov_dst.stat().st_size >= SYNCVSR_MIN_BYTES and not args.force:
+                print("  ✓ syncvsr_vox_lrs2_lrs3.ckpt already present")
+            else:
+                print(f"  ↓ downloading from {SYNCVSR_URL} …")
+                _run(["curl", "-sSL", "-o", str(ov_dst), SYNCVSR_URL])
+                size = ov_dst.stat().st_size if ov_dst.exists() else 0
+                if size < SYNCVSR_MIN_BYTES:
+                    print(f"  ⚠ downloaded only {size} bytes — the host may be blocked. "
+                          "Open-vocab VSR will report MODEL_UNAVAILABLE until provided.")
+                else:
+                    print(f"  ✓ syncvsr_vox_lrs2_lrs3.ckpt ({size // (1024*1024)} MB)")
 
         if not args.skip_fixtures:
             print("GRID test clips (rizkiarm/LipNet, MIT):")

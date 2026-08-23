@@ -36,6 +36,18 @@ demo: ## One-command real lip-reading demo on a labeled GRID clip
 lipread: ## Run real lip reading on your video: make lipread ARGS="--video x.mp4"
 	$(PYTHON) scripts/run_real_lipreading.py $(ARGS)
 
+.PHONY: production-test
+production-test: ## Open-vocab production test: make production-test ARGS="--video x.mp4 --ground-truth '...'"
+	$(PYTHON) scripts/production_lipreading_test.py $(ARGS)
+
+.PHONY: eval-openvocab
+eval-openvocab: ## Evaluate open-vocab model on evaluation/open_vocabulary (+ GRID ref)
+	$(PYTHON) scripts/evaluate_open_vocabulary.py --grid-reference $(ARGS)
+
+.PHONY: benchmark-openvocab
+benchmark-openvocab: ## Benchmark open-vocab VSR: make benchmark-openvocab ARGS="--video x.mp4"
+	$(PYTHON) scripts/benchmark_open_vocabulary.py $(ARGS)
+
 .PHONY: web-install
 web-install: ## Install frontend deps
 	cd apps/web && npm install

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from apps.api.config import get_settings
-from apps.api.routes import evaluation, exports, health, media, people, videos
+from apps.api.routes import evaluation, exports, health, media, models, people, videos
 from apps.api.services.logging_setup import configure_logging, get_logger
 from apps.api.services.video import VideoValidationError
 from database.base import create_all
@@ -50,6 +50,7 @@ def create_app() -> FastAPI:
     app.include_router(people.router)
     app.include_router(exports.router)
     app.include_router(evaluation.router)
+    app.include_router(models.router)
     app.include_router(media.router)
     return app
 

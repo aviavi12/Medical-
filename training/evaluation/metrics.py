@@ -54,6 +54,45 @@ def sentence_accuracy(predictions: list[str], references: list[str]) -> float:
     return correct / len(references)
 
 
+def alignment_ops(prediction: str, reference: str) -> dict:
+    """Word-level substitution/deletion/insertion/hit counts via edit-distance
+    backtrace (Phase 10). Rates are per reference word."""
+    ref = _normalize(reference).split()
+    hyp = _normalize(prediction).split()
+    n, m = len(ref), len(hyp)
+    # DP cost table with operation backtrace.
+    d = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n + 1):
+        d[i][0] = i
+    for j in range(m + 1):
+        d[0][j] = j
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            cost = 0 if ref[i - 1] == hyp[j - 1] else 1
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+    i, j = n, m
+    sub = dele = ins = hit = 0
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and d[i][j] == d[i - 1][j - 1] + (0 if ref[i - 1] == hyp[j - 1] else 1):
+            if ref[i - 1] == hyp[j - 1]:
+                hit += 1
+            else:
+                sub += 1
+            i, j = i - 1, j - 1
+        elif i > 0 and d[i][j] == d[i - 1][j] + 1:
+            dele += 1
+            i -= 1
+        else:
+            ins += 1
+            j -= 1
+    denom = max(1, n)
+    return {
+        "sub": sub, "del": dele, "ins": ins, "hits": hit, "ref_words": n, "hyp_words": m,
+        "sub_rate": round(sub / denom, 4), "del_rate": round(dele / denom, 4),
+        "ins_rate": round(ins / denom, 4),
+    }
+
+
 @dataclass
 class EvaluationResult:
     wer: float

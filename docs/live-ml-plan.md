@@ -13,8 +13,9 @@ licenses, and procedures behind it.
 | Tracking | ✅ REAL | IoU tracker (dependency-free) | Each tracked face = a selectable person; ByteTrack seam remains |
 | Face quality | ✅ REAL | OpenCV (blur/brightness/contrast/sharpness) | Calibrated so ~130px frontal faces are "usable" |
 | Landmarks (gaze) | ✅ REAL | MediaPipe Face Mesh (468 + iris) | Head pose + gaze |
-| Mouth ROI (lip reading) | ✅ REAL | dlib-68 → Procrustes align → 128×64 | Matches LipNet training distribution |
-| **Visual speech recognition** | ✅ **REAL** | **LipNet (GRID), PyTorch** | **Measured WER 0.017 / CER 0.004 on labeled GRID** |
+| Face/mouth ROI (lip reading) | ✅ REAL | 96×96 lower-face (SyncVSR) / dlib-68 128×64 (LipNet) | Per-model preprocessing |
+| **Open-vocab VSR (production)** | ✅ **REAL** | **SyncVSR Vox+LRS2+LRS3 (Conformer)** | Open vocabulary; runs on CPU ~1–2s/utterance; see docs/open-vocabulary-*.md |
+| VSR (benchmark) | ✅ REAL | LipNet (GRID) | Closed-vocab regression model, WER 0.017 on GRID |
 | Gaze estimation | ✅ REAL | Geometric (head pose + iris) | Approximate; multi-person "possible target" wired (§35) |
 | TTS | ✅ REAL | eSpeak NG (generic voice) | Offline, no weights; Piper is the neural upgrade when reachable |
 

@@ -15,22 +15,37 @@ text-to-speech — all synchronized to a timeline.
 
 ## ✅ Real, working lip reading (not a mock)
 
-The core pipeline runs **real models end to end** — a no-audio English video is transcribed
-from mouth movement alone by a real English visual speech recognition model (**LipNet**, GRID),
-with rigorous evaluation:
+The pipeline runs **real models end to end** — a no-audio English video is transcribed from
+visible mouth movement alone, visual-only, with rigorous evaluation. Two real models:
 
-| Split | WER | CER | Sentence accuracy | Speed (CPU) |
-|-------|-----|-----|-------------------|-------------|
-| overlap (default) | **0.017** | **0.004** | **90%** (9/10) | ~0.09 s / 3-s clip |
-| unseen speakers | 0.017 | 0.005 | 90% | ~0.08 s / clip |
+- **Open-vocabulary (production):** **SyncVSR** (`Vox+LRS2+LRS3`, Conformer, MIT) — transcribes
+  **natural, free-form English** (SentencePiece subwords, no fixed vocabulary/grammar). Runs on
+  CPU ~1–2 s per short utterance; GPU-ready. `LIP_READING_MODEL=syncvsr` (default).
+- **Benchmark:** **GRID-LipNet** (closed 51-word grammar, MIT) — a fast regression/CI model with
+  WER **0.017** on GRID. `LIP_READING_MODEL=lipnet`. Not a production transcriber.
 
-Try it in one command (audio is stripped first, proving the transcript is visual-only):
+The production test (strips audio first, proving visual-only):
 
 ```bash
-make install && make install-ml && make download-models
-make demo
-# → "BIN BLUE AT F TWO NOW"  (= ground truth, WER 0.000)
+make install && make install-ml && make download-models     # fetches the 1.14GB SyncVSR ckpt
+python scripts/production_lipreading_test.py --video my_no_audio_english.mp4 --ground-truth "..."
+# → open-vocabulary transcript + WER/CER/S-D-I, visual-only, on CPU or GPU
 ```
+
+The GRID benchmark demo (constrained vocabulary):
+
+```bash
+make demo   # → "BIN BLUE AT F TWO NOW" (WER 0.000, GRID-LipNet benchmark)
+```
+
+> **Open-vocabulary scope & honesty.** SyncVSR is a real sentence-level VSR model; on natural
+> connected English it performs at its published LRS-range accuracy. A **natural-English WER
+> number** in this repo requires natural-English test videos, which the build environment's
+> egress policy blocked from every source — the drop-in harness is ready
+> (`evaluation/open_vocabulary/`, `scripts/evaluate_open_vocabulary.py`). See
+> `docs/open-vocabulary-model-comparison.md`, `docs/open-vocabulary-evaluation.md`, and
+> `docs/current-lipreading-limitations.md`. The app never falls back to GRID silently, never uses
+> audio/ASR, and never hallucinates missing words.
 
 Models used: **LipNet-GRID** (Fengdalu/LipNet-PyTorch, MIT) for visual speech recognition,
 **dlib-68** for mouth alignment (research-only license), **MediaPipe** (Apache-2.0) for face

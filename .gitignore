@@ -43,6 +43,15 @@ tests/fixtures/visual_speech/grid/*.mpg
 # CLI/demo outputs
 results/
 
+# Generated evaluation report JSON (the .md is committed)
+docs/open-vocabulary-evaluation.json
+
+# User-provided natural-English evaluation videos (see evaluation/open_vocabulary/README.md)
+evaluation/open_vocabulary/*/*.mp4
+evaluation/open_vocabulary/*/*.mov
+evaluation/open_vocabulary/*/*.webm
+evaluation/open_vocabulary/*/*.mkv
+
 # OS / editor
 .DS_Store
 .idea/
@@ -53,3 +62,4 @@ out/
 dist/
 coverage/
 htmlcov/
+apps/web/*.tsbuildinfo

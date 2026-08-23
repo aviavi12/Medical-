@@ -74,6 +74,20 @@ export const api = {
   exportUrl: (videoId: string, personId: string, fmt: string) =>
     `/api/videos/${videoId}/people/${personId}/export/${fmt}`,
 
+  models: () =>
+    req<{
+      active_model: string;
+      active_open_vocabulary: boolean;
+      visual_only: boolean;
+      audio: string;
+      device: { device: string };
+      models: {
+        key: string; display_name: string; status: string; open_vocabulary: boolean;
+        dataset: string; vocabulary: string; license: string; installed: string;
+        active: boolean; notes: string;
+      }[];
+    }>("/api/models"),
+
   evaluate: (predictions: string[], references: string[]) =>
     req<{ wer: number; cer: number; sentence_accuracy: number; n: number }>(`/api/evaluation`, {
       method: "POST",

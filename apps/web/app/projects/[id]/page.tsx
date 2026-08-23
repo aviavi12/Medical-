@@ -7,7 +7,10 @@ import { AvailabilityNotice } from "@/components/AvailabilityNotice";
 import { QualityBar } from "@/components/QualityBar";
 import { TopBar } from "@/components/TopBar";
 import { api } from "@/lib/api";
+import { confidenceClass, confidenceLevel } from "@/lib/confidence";
 import type { GazeTimeline, Person, Transcript, Video } from "@/types";
+
+type ModelsInfo = Awaited<ReturnType<typeof api.models>>;
 
 export default function WorkspacePage({ params }: { params: { id: string } }) {
   const videoId = params.id;
@@ -21,6 +24,7 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
   const [gaze, setGaze] = useState<GazeTimeline | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [models, setModels] = useState<ModelsInfo | null>(null);
 
   const refreshPeople = useCallback(async () => {
     const r = await api.listPeople(videoId);
@@ -30,6 +34,7 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     api.getVideo(videoId).then(setVideo).catch((e) => setError(e.message));
+    api.models().then(setModels).catch(() => undefined);
     refreshPeople().catch(() => undefined);
   }, [videoId, refreshPeople]);
 
@@ -123,6 +128,13 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
               <span className="rounded-full border border-good px-2 py-1 text-good">
                 ✓ Visual-only lip reading
               </span>
+              {models && (
+                <span className="rounded-full border border-accent px-2 py-1 text-accent">
+                  Model: {models.models.find((m) => m.active)?.display_name ?? models.active_model} ·{" "}
+                  {models.active_open_vocabulary ? "OPEN vocabulary" : "CLOSED vocab (benchmark)"} ·{" "}
+                  {models.device.device.toUpperCase()}
+                </span>
+              )}
               <span className="text-muted">
                 Audio detected: <strong>{video.metadata.has_audio ? "Yes" : "No"}</strong>
                 {video.metadata.has_audio && " (ignored — transcript is visual-only)"}
@@ -229,11 +241,22 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                         >
                           <div className="flex justify-between text-xs text-muted">
                             <span>{fmt(s.start_time)}</span>
-                            <span className={s.uncertain ? "text-warn" : "text-good"}>
-                              {(s.confidence * 100).toFixed(0)}%
+                            <span className={confidenceClass(confidenceLevel(s.confidence, s.uncertain))}>
+                              {confidenceLevel(s.confidence, s.uncertain)} · {(s.confidence * 100).toFixed(0)}%
                             </span>
                           </div>
                           <div className={s.uncertain ? "confidence-low text-warn" : ""}>{s.text}</div>
+                          {s.alternatives && s.alternatives.length > 0 && (
+                            <div className="mt-1 text-[11px] text-muted">
+                              alt:{" "}
+                              {s.alternatives
+                                .slice(0, 3)
+                                .map((a: { text: string; confidence: number }) =>
+                                  `${a.text} (${(a.confidence * 100).toFixed(0)}%)`,
+                                )
+                                .join("  ·  ")}
+                            </div>
+                          )}
                         </button>
                       </li>
                     ))}

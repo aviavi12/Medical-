@@ -27,6 +27,15 @@ dlib-bin>=19.24
 # --- evaluation metric (WER/CER edit distance) ---
 editdistance>=0.6
 
+# --- open-vocabulary VSR (SyncVSR, vendored ESPnet inference) ---
+# The 1.14GB Vox+LRS2+LRS3.ckpt (MIT) is fetched by scripts/download_models.py
+# from the SyncVSR GitHub release (reachable). Tokenizer is vendored in-repo.
+omegaconf>=2.3
+sentencepiece>=0.1.99
+transformers>=4.38      # only a symbol import for the (unused) audio branch
+timm>=0.9
+six>=1.16
+
 # --- optional: ONNX export/runtime once correctness is established ---
 # onnxruntime>=1.17
 
