@@ -42,6 +42,23 @@ export interface JobStatus {
   error: string | null;
 }
 
+export type ReadinessStatus = "READY" | "WARNING" | "INSUFFICIENT";
+
+export interface PersonQualityReport {
+  status: ReadinessStatus;
+  readiness_score: number;
+  face_quality_score: number;
+  lip_readiness_score: number;
+  usable_duration: number;
+  visible_ratio: number;
+  avg_face_width_px: number;
+  avg_mouth_visibility_pct: number;
+  avg_sharpness: number;
+  avg_pose_quality: number;
+  tracking_stability: number;
+  reasons: string[];
+}
+
 export interface Person {
   id: string;
   track_number: number;
@@ -55,7 +72,9 @@ export interface Person {
   last_timestamp: number | null;
   thumbnail_url: string | null;
   selectable: boolean;
+  status: ReadinessStatus;
   reason: string | null;
+  quality_report: PersonQualityReport | null;
 }
 
 export interface TranscriptWord {
@@ -64,6 +83,8 @@ export interface TranscriptWord {
   end: number;
   confidence: number;
 }
+
+export type SpeakingActivity = "SPEAKING_LIKELY" | "NOT_SPEAKING" | "UNCERTAIN";
 
 export interface TranscriptSegment {
   start_time: number;
@@ -75,6 +96,47 @@ export interface TranscriptSegment {
   uncertain: boolean;
   words: TranscriptWord[];
   alternatives: { text: string; confidence: number }[];
+  visual_quality: number | null;
+  speaking_activity: SpeakingActivity | null;
+  frame_start: number | null;
+  frame_end: number | null;
+  window_index: number | null;
+  person_id: string | null;
+}
+
+export interface DebugCropFrame {
+  timestamp: number;
+  original_url: string | null;
+  face_url: string | null;
+  lower_face_url: string | null;
+  mouth_url: string | null;
+}
+
+export interface DebugCrops {
+  video_id: string;
+  person_id: string;
+  available: boolean;
+  note: string;
+  crop_mode: string | null;
+  frames: DebugCropFrame[];
+  sequence_url: string | null;
+}
+
+export interface PersonEvalResult {
+  video_id: string;
+  person_id: string;
+  enabled: boolean;
+  prediction: string;
+  reference: string;
+  wer: number | null;
+  cer: number | null;
+  substitutions: number | null;
+  deletions: number | null;
+  insertions: number | null;
+  ref_words: number | null;
+  hyp_words: number | null;
+  average_confidence: number | null;
+  note: string;
 }
 
 export interface Transcript {

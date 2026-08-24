@@ -1,8 +1,10 @@
 import type {
+  DebugCrops,
   GazeTimeline,
   JobStatus,
   Person,
   PersonAnalysisResult,
+  PersonEvalResult,
   Transcript,
   Video,
 } from "@/types";
@@ -61,6 +63,15 @@ export const api = {
 
   transcript: (videoId: string, personId: string) =>
     req<Transcript>(`/api/videos/${videoId}/people/${personId}/transcript`),
+
+  debugCrops: (videoId: string, personId: string, samples = 4) =>
+    req<DebugCrops>(`/api/videos/${videoId}/people/${personId}/debug?samples=${samples}`),
+
+  evaluatePerson: (videoId: string, personId: string, groundTruth: string, useProcessed = false) =>
+    req<PersonEvalResult>(`/api/videos/${videoId}/people/${personId}/evaluate`, {
+      method: "POST",
+      body: JSON.stringify({ ground_truth: groundTruth, use_processed: useProcessed }),
+    }),
 
   gaze: (videoId: string, personId: string) =>
     req<GazeTimeline>(`/api/videos/${videoId}/people/${personId}/gaze`),
