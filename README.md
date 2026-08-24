@@ -139,8 +139,32 @@ make api
 make web
 ```
 
-Then open http://localhost:3000, upload a 720p+ video, run the coarse scan, pick a person, and
-analyze.
+### Using the web app (primary path — no Python needed)
+
+The browser is the product. At http://localhost:3000 you:
+
+1. **Upload** a video (≤5 min; 720p+, 130px+ face, 25fps+ recommended — MP4/MOV/WebM).
+   Low-quality video is **analyzed and reported**, never silently rejected. A **no-audio**
+   video is fully supported (`Audio: None`, `Visual-only mode: ACTIVE`); when audio is present
+   it is shown as `Present (ignored)` and **never reaches** the VSR/ASR/TTS path.
+2. **Scan for people** → every reasonably visible person becomes a gallery card with a
+   `READY` / `WARNING` / `INSUFFICIENT` badge (a **combined** readiness score, not a single
+   face-size threshold) and a full quality report (face quality, lip-reading readiness, usable
+   duration, avg face width, mouth visibility, sharpness, pose, tracking).
+3. **Select a person** → **Analyze speech** runs open-vocabulary SyncVSR on *that person's*
+   visible mouth movement only (multi-person videos never mix mouths across people).
+4. **Read the transcript**, synced to the video: each segment shows text, **confidence %**,
+   **visual quality %**, a **Visual Speaking Activity Estimate**
+   (`SPEAKING_LIKELY`/`NOT_SPEAKING`/`UNCERTAIN`), source frame range and model window;
+   low-confidence text is masked `[uncertain]`, and a genuinely silent stretch reads
+   `[no speech evidence]` rather than inventing words. Export **SRT / TXT / JSON / report**.
+5. **Debug** (optional): see the exact original / face / lower-face / mouth crops and the
+   temporal sequence the model sees. **Developer tools** (optional) expose a ground-truth
+   textarea → WER / CER / S·D·I — never shown to normal users.
+
+> **Honest scope.** This is open-vocabulary English *visual* speech recognition — estimates
+> from visible lip movement, which is inherently probabilistic. It does not claim natural-English
+> professional accuracy, does not "read minds", is not 100% accurate, and cannot hear anything.
 
 ## Running tests
 
