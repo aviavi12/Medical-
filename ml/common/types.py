@@ -210,6 +210,12 @@ class LipReadingSegment:
     processed_text: str = ""
     words: list[LipReadingWord] = field(default_factory=list)
     alternatives: list[tuple[str, float]] = field(default_factory=list)
+    # Provenance + display metadata (§15, §17, §19).
+    visual_quality: float | None = None       # 0..100 avg face quality over window
+    speaking_activity: str | None = None      # SPEAKING_LIKELY / NOT_SPEAKING / UNCERTAIN
+    frame_start: int | None = None            # source frame range (inclusive)
+    frame_end: int | None = None
+    window_index: int | None = None           # which model window produced this
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -221,6 +227,11 @@ class LipReadingSegment:
             "processed_text": self.processed_text,
             "words": [w.__dict__ for w in self.words],
             "alternatives": [{"text": t, "confidence": c} for t, c in self.alternatives],
+            "visual_quality": self.visual_quality,
+            "speaking_activity": self.speaking_activity,
+            "frame_start": self.frame_start,
+            "frame_end": self.frame_end,
+            "window_index": self.window_index,
         }
 
 

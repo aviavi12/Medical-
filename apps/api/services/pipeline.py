@@ -33,7 +33,7 @@ from ml.lipreading import get_lip_reading_model
 from ml.lipreading.inference import run_inference
 from ml.mouth import MouthExtractor, build_sequence
 from ml.quality import get_quality_estimator
-from ml.quality.readiness import PersonAggregate, lip_reading_readiness
+from ml.quality.readiness import PersonAggregate, lip_reading_readiness, readiness_status
 from ml.tracking import get_tracker
 
 logger = get_logger("silentspeak.pipeline")
@@ -194,22 +194,40 @@ def run_coarse_scan(
         avg = lambda xs: (sum(xs) / len(xs)) if xs else 0.0  # noqa: E731
         avg_face_quality = avg(agg.face_quality)
         avg_face_width = avg(agg.face_width)
+        avg_mouth_vis = avg(agg.mouth_vis)
+        avg_sharpness = avg(agg.sharpness)
+        avg_pose = avg(agg.pose)
         avg_res = min(1.0, avg_face_width / 200.0) if avg_face_width else 0.0
 
         readiness = lip_reading_readiness(
             PersonAggregate(
                 face_quality=avg_face_quality,
-                mouth_visibility=avg(agg.mouth_vis),
+                mouth_visibility=avg_mouth_vis,
                 face_resolution=avg_res,
                 tracking_stability=tracking_stability,
-                pose_quality=avg(agg.pose),
-                sharpness=avg(agg.sharpness),
+                pose_quality=avg_pose,
+                sharpness=avg_sharpness,
             ),
             config.weights,
         )
 
         screen_time = agg.frames_seen / max(1, config.coarse_fps)
         visible_ratio = agg.frames_seen / max(1, total_samples)
+        usable_duration = (agg.last_ts - agg.first_ts) if (agg.first_ts is not None and agg.last_ts is not None) else screen_time
+
+        # Combined-score status + full quality report (§10, §11, §25).
+        report = readiness_status(
+            readiness_score=readiness,
+            avg_face_width_px=avg_face_width,
+            avg_mouth_visibility=avg_mouth_vis,
+            avg_sharpness=avg_sharpness,
+            avg_pose_quality=avg_pose,
+            tracking_stability=tracking_stability,
+            usable_duration=usable_duration,
+            face_quality_score=avg_face_quality,
+            visible_ratio=visible_ratio,
+            gates=config.gates,
+        )
 
         pt = models.PersonTrack(
             video_id=video.id,
@@ -221,6 +239,14 @@ def run_coarse_scan(
             average_detection_confidence=round(avg(agg.det_conf), 4),
             average_face_quality=round(avg_face_quality, 2),
             lip_readiness_score=readiness,
+            readiness_status=report.status,
+            usable_duration=round(usable_duration, 3),
+            avg_face_width=round(avg_face_width, 1),
+            avg_mouth_visibility=round(avg_mouth_vis, 4),
+            avg_sharpness=round(avg_sharpness, 4),
+            avg_pose_quality=round(avg_pose, 4),
+            tracking_stability=round(tracking_stability, 4),
+            quality_reasons=report.reasons,
         )
         db.add(pt)
         db.flush()  # get pt.id
@@ -359,19 +385,25 @@ def run_person_analysis(
         .order_by(models.FaceObservation.timestamp)
         .all()
     )
-    avg_width = (sum(f.width for f in face_obs) / len(face_obs)) if face_obs else 0.0
-    avg_mouth = (sum(f.mouth_visibility for f in face_obs) / len(face_obs)) if face_obs else 0.0
+    avg_width = person.avg_face_width or ((sum(f.width for f in face_obs) / len(face_obs)) if face_obs else 0.0)
+    avg_mouth = person.avg_mouth_visibility or ((sum(f.mouth_visibility for f in face_obs) / len(face_obs)) if face_obs else 0.0)
     passed, failures = passes_quality_gates(
         face_width=avg_width,
         face_quality=person.average_face_quality,
         mouth_visibility=avg_mouth,
-        tracking_stability=person.visible_frame_ratio,
+        tracking_stability=person.tracking_stability or person.visible_frame_ratio,
         gates=config.gates,
         override=override_gates,
+        readiness_score=person.lip_readiness_score,
+        avg_sharpness=person.avg_sharpness or 1.0,
+        avg_pose_quality=person.avg_pose_quality or 1.0,
+        usable_duration=person.usable_duration or person.screen_time,
+        visible_ratio=person.visible_frame_ratio,
     )
     if not passed:
-        _set_job(db, job, status="FAILED", stage="QUALITY_ANALYSIS", error=" ".join(failures))
-        return {"state": "NO_SIGNAL", "detail": " ".join(failures), "segments": 0}
+        detail = " ".join(failures) or "Combined visual quality is insufficient for reliable lip reading."
+        _set_job(db, job, status="FAILED", stage="QUALITY_ANALYSIS", error=detail)
+        return {"state": "NO_SIGNAL", "detail": detail, "segments": 0}
 
     landmarker = get_landmarker(config)
     lm_av = landmarker.availability()
@@ -464,6 +496,9 @@ def run_person_analysis(
     if result is not None and result.availability.is_available:
         mv = _persist_model_version(db, model)
         for seg in result.segments:
+            # Fill per-segment visual quality (§15) + person provenance (§19) when
+            # the model did not set them (e.g. LipNet path).
+            vq = seg.visual_quality if seg.visual_quality is not None else round(person.average_face_quality, 1)
             row = models.LipReadingSegment(
                 person_track_id=person.id,
                 start_time=seg.start_time,
@@ -474,6 +509,11 @@ def run_person_analysis(
                 raw_text=seg.raw_text,
                 processed_text=seg.processed_text,
                 alternatives=[{"text": t, "confidence": c} for t, c in seg.alternatives],
+                visual_quality=vq,
+                speaking_activity=seg.speaking_activity,
+                frame_start=seg.frame_start,
+                frame_end=seg.frame_end,
+                window_index=seg.window_index,
             )
             db.add(row)
             db.flush()

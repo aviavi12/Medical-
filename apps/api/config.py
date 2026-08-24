@@ -62,12 +62,16 @@ class Settings(BaseSettings):
     person_detector: str = "yolo"
     face_detector: str = "mediapipe"
     tracker: str = "bytetrack"
-    lip_reading_model: str = "avhubert"
+    lip_reading_model: str = "syncvsr"
     tts_provider: str = "local"
     yolo_img_size: int = 1280
 
     # Safety
     allow_mock_inference: bool = False
+
+    # Developer-only evaluation mode (§20–§22): exposes ground-truth WER/CER
+    # scoring in the API/UI. Off in production; never shown to normal users.
+    enable_evaluation_mode: bool = True
 
     # ── derived helpers ─────────────────────────────────────────────────────
     @property

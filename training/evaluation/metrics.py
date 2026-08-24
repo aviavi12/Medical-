@@ -28,7 +28,13 @@ def levenshtein(a: list, b: list) -> int:
 
 
 def _normalize(text: str) -> str:
-    return " ".join(text.strip().lower().split())
+    # Lowercase, collapse whitespace, and strip surface punctuation so WER/CER
+    # measure the words — not LM-added periods or ground-truth commas (standard
+    # ASR/VSR scoring convention).
+    import re
+
+    cleaned = re.sub(r"[.,!?;:\"'`()\[\]{}]", " ", text.lower())
+    return " ".join(cleaned.split())
 
 
 def word_error_rate(prediction: str, reference: str) -> float:

@@ -79,6 +79,23 @@ class AvailabilityOut(BaseModel):
     model: dict[str, Any] | None = None
 
 
+class PersonQualityReportOut(BaseModel):
+    """Full per-person quality report (§25)."""
+
+    status: str = "INSUFFICIENT"            # READY / WARNING / INSUFFICIENT
+    readiness_score: float = 0.0            # combined 0..100 (the gate signal)
+    face_quality_score: float = 0.0         # 0..100
+    lip_readiness_score: float = 0.0        # 0..100
+    usable_duration: float = 0.0            # seconds
+    visible_ratio: float = 0.0              # 0..1
+    avg_face_width_px: float = 0.0
+    avg_mouth_visibility_pct: float = 0.0
+    avg_sharpness: float = 0.0
+    avg_pose_quality: float = 0.0
+    tracking_stability: float = 0.0
+    reasons: list[str] = Field(default_factory=list)
+
+
 class PersonOut(BaseModel):
     id: str
     track_number: int
@@ -92,7 +109,10 @@ class PersonOut(BaseModel):
     last_timestamp: float | None = None
     thumbnail_url: str | None = None
     selectable: bool
+    # Combined-score gate status (§10): READY / WARNING / INSUFFICIENT.
+    status: str = "INSUFFICIENT"
     reason: str | None = None
+    quality_report: PersonQualityReportOut | None = None
 
 
 class PeopleListOut(BaseModel):
@@ -118,6 +138,13 @@ class TranscriptSegmentOut(BaseModel):
     uncertain: bool = False
     words: list[TranscriptWordOut] = Field(default_factory=list)
     alternatives: list[dict[str, Any]] = Field(default_factory=list)
+    # Per-segment display + provenance metadata (§15, §17, §19).
+    visual_quality: float | None = None        # 0..100 avg face quality over the window
+    speaking_activity: str | None = None       # SPEAKING_LIKELY / NOT_SPEAKING / UNCERTAIN
+    frame_start: int | None = None             # source frame range
+    frame_end: int | None = None
+    window_index: int | None = None            # which model window produced this
+    person_id: str | None = None
 
 
 class TranscriptOut(BaseModel):
@@ -158,6 +185,50 @@ class PersonAnalysisResultOut(BaseModel):
     gaze: int = 0
     landmarks_available: bool = False
     lipreading_available: bool = False
+
+
+class DebugCropFrameOut(BaseModel):
+    """One debug sample: the crops the model actually sees (§12)."""
+
+    timestamp: float
+    original_url: str | None = None
+    face_url: str | None = None
+    lower_face_url: str | None = None
+    mouth_url: str | None = None
+
+
+class DebugCropsOut(BaseModel):
+    video_id: str
+    person_id: str
+    available: bool = False
+    note: str = ""
+    crop_mode: str | None = None
+    frames: list[DebugCropFrameOut] = Field(default_factory=list)
+    sequence_url: str | None = None      # horizontal temporal strip of lower-face crops
+
+
+class PersonEvalRequest(BaseModel):
+    """Developer-only evaluation against a pasted ground-truth transcript (§20–§22)."""
+
+    ground_truth: str
+    use_processed: bool = True
+
+
+class PersonEvalResultOut(BaseModel):
+    video_id: str
+    person_id: str
+    enabled: bool = True
+    prediction: str = ""
+    reference: str = ""
+    wer: float | None = None
+    cer: float | None = None
+    substitutions: int | None = None
+    deletions: int | None = None
+    insertions: int | None = None
+    ref_words: int | None = None
+    hyp_words: int | None = None
+    average_confidence: float | None = None
+    note: str = ""
 
 
 class TTSRequest(BaseModel):

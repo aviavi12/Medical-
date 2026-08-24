@@ -124,7 +124,34 @@ class OpenVocabularyLipReadingModel(LipReadingModel):
         return self.get_model_info().as_dict()
 
     # ── inference ─────────────────────────────────────────────────────────────
-    def _infer_window(self, gray_crops: list, timestamps: list[float]) -> LipReadingSegment:
+    def _infer_window(
+        self,
+        gray_crops: list,
+        timestamps: list[float],
+        *,
+        window_index: int = 0,
+        frame_offset: int = 0,
+        visual_quality: float | None = None,
+    ) -> LipReadingSegment:
+        # Visual Speaking Activity Estimate (§17) — from lip motion, not the model.
+        from ml.lipreading.activity import NOT_SPEAKING, estimate_activity
+
+        activity, _score = estimate_activity(gray_crops)
+        n = len(gray_crops)
+        frame_start = frame_offset
+        frame_end = frame_offset + n - 1
+
+        # Silence handling (§18): if the mouth is clearly not moving, do NOT force
+        # the model to produce a transcript — report NO_SPEECH_EVIDENCE.
+        if activity == NOT_SPEAKING:
+            return LipReadingSegment(
+                start_time=round(timestamps[0], 3) if timestamps else 0.0,
+                end_time=round(timestamps[-1], 3) if timestamps else 0.0,
+                text="", confidence=0.0, raw_text="", alternatives=[],
+                visual_quality=visual_quality, speaking_activity=activity,
+                frame_start=frame_start, frame_end=frame_end, window_index=window_index,
+            )
+
         sample = self._pre.to_tensor(gray_crops)  # type: ignore[union-attr]
         nbest = self._model.nbest(sample, n=3)
         text, conf = (nbest[0] if nbest else ("", 0.0))
@@ -133,9 +160,13 @@ class OpenVocabularyLipReadingModel(LipReadingModel):
             start_time=round(timestamps[0], 3) if timestamps else 0.0,
             end_time=round(timestamps[-1], 3) if timestamps else 0.0,
             text=text, confidence=conf, raw_text=text, alternatives=alts,
+            visual_quality=visual_quality, speaking_activity=activity,
+            frame_start=frame_start, frame_end=frame_end, window_index=window_index,
         )
 
-    def transcribe_crops(self, gray_crops: list, timestamps: list[float]) -> LipReadingResult:
+    def transcribe_crops(
+        self, gray_crops: list, timestamps: list[float], visual_quality: float | None = None
+    ) -> LipReadingResult:
         av = self.availability()
         if not av.is_available:
             return LipReadingResult(availability=av, segments=[])
@@ -150,18 +181,25 @@ class OpenVocabularyLipReadingModel(LipReadingModel):
             )
         segments: list[LipReadingSegment] = []
         if len(gray_crops) <= WINDOW_FRAMES:
-            segments.append(self._infer_window(gray_crops, timestamps))
+            segments.append(self._infer_window(gray_crops, timestamps, window_index=0,
+                                               frame_offset=0, visual_quality=visual_quality))
         else:
             i = 0
+            widx = 0
             while i < len(gray_crops):
                 wc = gray_crops[i:i + WINDOW_FRAMES]
                 wt = timestamps[i:i + WINDOW_FRAMES]
                 if len(wc) < MIN_FRAMES:
                     break
-                segments.append(self._infer_window(wc, wt))
+                segments.append(self._infer_window(wc, wt, window_index=widx,
+                                                   frame_offset=i, visual_quality=visual_quality))
+                widx += 1
                 if i + WINDOW_FRAMES >= len(gray_crops):
                     break
                 i += STRIDE_FRAMES
+            # Remove duplicated boundary words from overlapping windows (§16).
+            from ml.lipreading.merge import merge_overlapping_segments
+            segments = merge_overlapping_segments(segments)
         segments = apply_postprocessing(segments, threshold=CONF_THRESHOLD)
         return LipReadingResult(availability=available(self.get_model_info()), segments=segments)
 

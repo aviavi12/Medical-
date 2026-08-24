@@ -12,6 +12,7 @@ from __future__ import annotations
 from ml.common.types import LipReadingSegment
 
 UNCERTAIN = "[uncertain]"
+NO_SPEECH_EVIDENCE = "[no speech evidence]"
 
 
 def is_uncertain(confidence: float, threshold: float = 0.5) -> bool:
@@ -51,8 +52,16 @@ def apply_postprocessing(
 ) -> list[LipReadingSegment]:
     out: list[LipReadingSegment] = []
     for seg in segments:
+        # A window the activity estimator judged NOT_SPEAKING carries no text on
+        # purpose (§18) — surface it as NO_SPEECH_EVIDENCE, never as invented words.
+        if not (seg.text or "").strip() and getattr(seg, "speaking_activity", None) == "NOT_SPEAKING":
+            seg.text = NO_SPEECH_EVIDENCE
+            seg.raw_text = seg.raw_text or ""
+            seg.processed_text = NO_SPEECH_EVIDENCE
+            out.append(seg)
+            continue
         seg = mask_low_confidence(seg, threshold)
-        if lm_cleanup and seg.text != UNCERTAIN:
+        if lm_cleanup and seg.text not in (UNCERTAIN, NO_SPEECH_EVIDENCE):
             seg.processed_text = light_lm_cleanup(seg.text)
         out.append(seg)
     return out

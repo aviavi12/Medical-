@@ -41,14 +41,24 @@ def test_readiness_score_monotonic():
 
 
 def test_quality_gates_fail_and_pass():
-    gates = QualityGates(min_face_width=80, min_face_quality=60, min_mouth_visibility=0.6,
-                         min_tracking_stability=0.6)
-    ok, failures = passes_quality_gates(face_width=40, face_quality=50, mouth_visibility=0.3,
-                                        tracking_stability=0.3, gates=gates)
-    assert not ok and len(failures) == 4
+    # The gate is the combined-score status (§10, §11), not a per-threshold count.
+    # A tiny, low-quality, barely-tracked face is INSUFFICIENT with specific reasons.
+    gates = QualityGates()
+    ok, failures = passes_quality_gates(
+        face_width=40, face_quality=50, mouth_visibility=0.3, tracking_stability=0.3,
+        gates=gates, readiness_score=20.0, avg_sharpness=0.2, avg_pose_quality=0.3,
+        usable_duration=1.0,
+    )
+    assert not ok
+    assert failures  # specific, human-readable weaknesses (§24)
+    assert any("too small" in f.lower() for f in failures)
 
-    ok2, failures2 = passes_quality_gates(face_width=120, face_quality=80, mouth_visibility=0.8,
-                                          tracking_stability=0.8, gates=gates)
+    # A good, well-tracked frontal face passes with no blocking reasons.
+    ok2, failures2 = passes_quality_gates(
+        face_width=160, face_quality=80, mouth_visibility=0.8, tracking_stability=0.9,
+        gates=gates, readiness_score=78.0, avg_sharpness=0.7, avg_pose_quality=0.8,
+        usable_duration=5.0,
+    )
     assert ok2 and failures2 == []
 
 

@@ -124,6 +124,15 @@ class PersonTrack(Base):
     average_detection_confidence: Mapped[float] = mapped_column(Float, default=0.0)
     average_face_quality: Mapped[float] = mapped_column(Float, default=0.0)
     lip_readiness_score: Mapped[float] = mapped_column(Float, default=0.0)
+    # Per-person quality report aggregates (§25) — persisted at coarse-scan time.
+    readiness_status: Mapped[str] = mapped_column(String(16), default="INSUFFICIENT")
+    usable_duration: Mapped[float] = mapped_column(Float, default=0.0)
+    avg_face_width: Mapped[float] = mapped_column(Float, default=0.0)
+    avg_mouth_visibility: Mapped[float] = mapped_column(Float, default=0.0)
+    avg_sharpness: Mapped[float] = mapped_column(Float, default=0.0)
+    avg_pose_quality: Mapped[float] = mapped_column(Float, default=0.0)
+    tracking_stability: Mapped[float] = mapped_column(Float, default=0.0)
+    quality_reasons: Mapped[list | None] = mapped_column(JSON, nullable=True)
     thumbnail_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
@@ -186,6 +195,12 @@ class LipReadingSegment(Base):
     raw_text: Mapped[str] = mapped_column(Text, default="")
     processed_text: Mapped[str] = mapped_column(Text, default="")
     alternatives: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Per-segment provenance + display metadata (§15, §17, §19).
+    visual_quality: Mapped[float | None] = mapped_column(Float, nullable=True)
+    speaking_activity: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    frame_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    frame_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    window_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     person_track: Mapped["PersonTrack"] = relationship(back_populates="segments")
     words: Mapped[list["LipReadingWordRow"]] = relationship(

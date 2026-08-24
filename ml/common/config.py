@@ -77,12 +77,26 @@ class ReadinessWeights:
 
 @dataclass
 class QualityGates:
-    """Thresholds that must be met before expensive lip reading runs (§65)."""
+    """Thresholds for the combined-score readiness gate (§10, §11, §65).
 
-    min_face_width: int = field(default_factory=lambda: _i("MIN_FACE_WIDTH", 80))
+    The decision to show *Analyze Speech* is NOT a single face-size threshold —
+    it is the combined ``lip_reading_readiness`` score compared against
+    ``ready_score`` / ``warning_score`` (see ml/quality/readiness.readiness_status).
+    The individual ``min_*`` values are kept only to produce specific,
+    human-readable weakness reasons (§24) and an absolute "unusable" floor.
+    """
+
+    # Combined-score thresholds (0..100). READY >= ready_score; INSUFFICIENT
+    # below warning_score; WARNING in between (usable but flagged).
+    ready_score: float = field(default_factory=lambda: _f("READINESS_READY_SCORE", 55))
+    warning_score: float = field(default_factory=lambda: _f("READINESS_WARNING_SCORE", 30))
+    # Recommended (not mandatory) input quality — drives WARNING reasons.
+    recommended_face_width: int = field(default_factory=lambda: _i("RECOMMENDED_FACE_WIDTH", 130))
+    # Absolute floor: below this a face genuinely cannot be lip-read (§11).
+    min_face_width: int = field(default_factory=lambda: _i("MIN_FACE_WIDTH", 48))
     min_face_quality: float = field(default_factory=lambda: _f("MIN_FACE_QUALITY", 60))
-    min_mouth_visibility: float = field(default_factory=lambda: _f("MIN_MOUTH_VISIBILITY", 0.60))
-    min_tracking_stability: float = field(default_factory=lambda: _f("MIN_TRACKING_STABILITY", 0.60))
+    min_mouth_visibility: float = field(default_factory=lambda: _f("MIN_MOUTH_VISIBILITY", 0.35))
+    min_tracking_stability: float = field(default_factory=lambda: _f("MIN_TRACKING_STABILITY", 0.40))
 
 
 @dataclass
