@@ -37,15 +37,40 @@ export const api = {
   getVideo: (id: string) => req<Video>(`/api/videos/${id}`),
   deleteVideo: (id: string) => req<void>(`/api/videos/${id}`, { method: "DELETE" }),
 
-  async uploadVideo(file: File): Promise<Video> {
-    const form = new FormData();
-    form.append("file", file);
-    const res = await fetch("/api/videos", { method: "POST", body: form });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || body.error || "Upload failed");
-    }
-    return res.json();
+  // Uploads via XHR so we can report real upload progress (fetch cannot).
+  uploadVideo(file: File, onProgress?: (pct: number) => void): Promise<Video> {
+    return new Promise<Video>((resolve, reject) => {
+      const form = new FormData();
+      form.append("file", file);
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/videos");
+      if (onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+        };
+      }
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText) as Video);
+          } catch {
+            reject(new Error("Upload succeeded but the response could not be read."));
+          }
+        } else {
+          let detail = "Upload failed. Please try again.";
+          try {
+            const body = JSON.parse(xhr.responseText);
+            detail = body.detail || body.error || detail;
+          } catch {
+            /* keep default */
+          }
+          reject(new Error(detail));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Network error during upload. Check your connection and try again."));
+      xhr.ontimeout = () => reject(new Error("The upload timed out. Please try again."));
+      xhr.send(form);
+    });
   },
 
   analyzeVideo: (id: string) =>

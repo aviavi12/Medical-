@@ -216,6 +216,20 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
     };
   }, [videoId, pollScan]);
 
+  // If detection finds exactly one usable person, pre-select them (still
+  // changeable) so a single-speaker video needs one fewer click (§5).
+  const autoSelectedRef = useRef(false);
+  useEffect(() => {
+    if (autoSelectedRef.current || selected) return;
+    const usable = people.filter((p) => p.selectable);
+    if (usable.length === 1) {
+      autoSelectedRef.current = true;
+      selectPerson(usable[0]);
+    }
+    // selectPerson is stable in behavior; excluded to avoid re-running on identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [people, selected]);
+
   // ── Step 3: select a person ───────────────────────────────────────────────
   async function selectPerson(p: Person) {
     setSelected(p);
@@ -398,23 +412,39 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
         />
 
         {error && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-bad bg-panel2 p-4 text-sm text-bad">
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-bad bg-panel2 p-4 text-sm text-bad"
+          >
             <span>⛔ {error}</span>
-            <button
-              onClick={detectPeople}
-              className="focus-ring rounded-lg border border-bad px-3 py-1.5 text-xs font-medium hover:bg-bad hover:text-black"
-            >
-              Retry
-            </button>
+            {/* No-people is not a failure to retry — the recovery is a better clip. */}
+            {/^No people/i.test(error) ? (
+              <Link
+                href="/"
+                className="focus-ring rounded-lg border border-bad px-3 py-1.5 text-xs font-medium hover:bg-bad hover:text-black"
+              >
+                Upload another video
+              </Link>
+            ) : (
+              <button
+                onClick={detectPeople}
+                className="focus-ring rounded-lg border border-bad px-3 py-1.5 text-xs font-medium hover:bg-bad hover:text-black"
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
 
         {/* ── PEOPLE GALLERY ──────────────────────────────────────────────── */}
         {hasPeople && (
           <section id="people-gallery">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-              People detected · {people.length}
-            </h2>
+            <h2 className="text-lg font-semibold">Who should LipSight analyze?</h2>
+            <p className="mb-3 text-sm text-muted">
+              Select the person whose visible speech you want to analyze
+              {people.length > 1 ? ` — ${people.length} people detected.` : "."}
+            </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {people.map((p) => {
                 const isSel = selected?.id === p.id;
@@ -536,9 +566,12 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
             {/* 1. Analysis status + confidence/quality summary (§5, §6, §17). */}
             <ResultsSummary t={transcript!} />
 
-            {/* Transcript */}
+            {/* Transcript — the dominant result (§6). */}
             <div className="rounded-xl border border-border bg-panel p-4">
-              <h3 className="mb-2 text-sm font-semibold">Visual speech transcription</h3>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">Transcript</h3>
+                <CopyButton text={plainTranscript(transcript!)} />
+              </div>
               {transcript && <AvailabilityNotice availability={transcript.availability} />}
               <ul className="mt-2 space-y-2">
                 {transcript!.segments.map((s, i) => (
@@ -546,6 +579,9 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                 ))}
               </ul>
             </div>
+
+            {/* Analysis evidence — real measured signals only (§7, §16). */}
+            <AnalysisEvidence t={transcript!} person={selected} models={models} />
 
             {/* Gaze + Export side by side */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -836,7 +872,16 @@ function ActionCard(props: {
 function Card({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "busy" | "done" | "warn" }) {
   const border =
     tone === "busy" ? "border-accent" : tone === "done" ? "border-good" : tone === "warn" ? "border-warn" : "border-border";
-  return <div className={`rounded-xl border ${border} bg-panel p-4`}>{children}</div>;
+  // Announce progress/outcome cards to assistive tech without stealing focus.
+  const live = tone === "busy" || tone === "done";
+  return (
+    <div
+      className={`rounded-xl border ${border} bg-panel p-4`}
+      {...(live ? { role: "status", "aria-live": "polite" as const } : {})}
+    >
+      {children}
+    </div>
+  );
 }
 
 function Meta({ k, v }: { k: string; v: string }) {
@@ -904,6 +949,11 @@ function ResultsSummary({ t }: { t: Transcript }) {
           front-facing view of the speaker.
         </p>
       ) : null}
+      <p className="mt-3 text-[11px] leading-relaxed text-muted">
+        Confidence reflects how strongly the visible evidence supports the generated
+        transcription. It is affected by video quality, mouth visibility, head movement and
+        lighting — it is not a guarantee of correctness.
+      </p>
     </div>
   );
 }
@@ -913,6 +963,87 @@ function Stat({ label, value, valueClass = "text-white" }: { label: string; valu
     <div className="rounded-lg border border-border bg-panel2 p-3">
       <div className="text-[10px] uppercase tracking-wide text-muted">{label}</div>
       <div className={`mt-0.5 text-lg font-semibold ${valueClass}`}>{value}</div>
+    </div>
+  );
+}
+
+function plainTranscript(t: Transcript): string {
+  return t.segments
+    .filter((s) => s.text && s.text !== NO_SPEECH && s.text !== UNCERTAIN)
+    .map((s) => s.text)
+    .join(" ")
+    .trim();
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={!text}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* clipboard unavailable in this context */
+        }
+      }}
+      className="focus-ring rounded border border-border px-2 py-1 text-[11px] text-muted hover:border-accent disabled:opacity-40"
+      aria-label="Copy transcript to clipboard"
+    >
+      {copied ? "Copied ✓" : "Copy transcript"}
+    </button>
+  );
+}
+
+// Real measured signals behind a result (§7, §16). Anything missing shows
+// "Not available" rather than a fabricated value.
+function AnalysisEvidence({
+  t,
+  person,
+  models,
+}: {
+  t: Transcript;
+  person: Person | null;
+  models: ModelsInfo | null;
+}) {
+  const framed = t.segments.filter((s) => s.frame_start != null && s.frame_end != null);
+  const framesAnalyzed = framed.length
+    ? Math.max(...framed.map((s) => s.frame_end as number)) -
+      Math.min(...framed.map((s) => s.frame_start as number)) +
+      1
+    : null;
+  const spanEnd = t.segments.length ? Math.max(...t.segments.map((s) => s.end_time)) : null;
+  const spanStart = t.segments.length ? Math.min(...t.segments.map((s) => s.start_time)) : null;
+  const analyzed =
+    spanEnd != null && spanStart != null ? spanEnd - spanStart : person?.quality_report?.usable_duration ?? null;
+  const qr = person?.quality_report ?? null;
+  const model = t.model_version ?? models?.active_model ?? null;
+
+  const rows: [string, string][] = [
+    ["Analyzed duration", analyzed != null ? `${analyzed.toFixed(1)}s` : "Not available"],
+    ["Frames analyzed", framesAnalyzed != null ? `${framesAnalyzed}` : "Not available"],
+    ["Mouth visibility", qr ? `${qr.avg_mouth_visibility_pct.toFixed(0)}%` : "Not available"],
+    ["Avg face width", qr ? `${qr.avg_face_width_px.toFixed(0)}px` : "Not available"],
+    ["Sharpness", qr ? qr.avg_sharpness.toFixed(2) : "Not available"],
+    ["Model", model ?? "Not available"],
+  ];
+  return (
+    <div className="rounded-xl border border-border bg-panel p-4">
+      <h3 className="text-sm font-semibold">Analysis evidence</h3>
+      <p className="mb-3 mt-1 text-[11px] text-muted">
+        Measured signals from the actual analysis — not estimates.
+      </p>
+      <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+        {rows.map(([k, v]) => (
+          <div key={k} className="rounded-lg border border-border bg-panel2 p-2">
+            <dt className="text-[10px] uppercase tracking-wide text-muted">{k}</dt>
+            <dd className={`mt-0.5 font-medium ${v === "Not available" ? "text-muted" : "text-white"}`}>{v}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -969,10 +1100,10 @@ function SegmentRow({ s, onSeek }: { s: TranscriptSegment; onSeek: () => void })
 
 function humanStatus(status: string): string {
   const map: Record<string, string> = {
-    QUEUED: "Queued…",
-    DETECTING_FACES: "Detecting faces…",
+    QUEUED: "Preparing video…",
+    DETECTING_FACES: "Detecting people…",
     DETECTING_PEOPLE: "Detecting people…",
-    QUALITY_ANALYSIS: "Scoring face quality…",
+    QUALITY_ANALYSIS: "Assessing video quality…",
     READY_FOR_SELECTION: "Done.",
   };
   return map[status] || "Working…";
