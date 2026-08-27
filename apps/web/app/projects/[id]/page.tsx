@@ -23,6 +23,16 @@ type ModelsInfo = Awaited<ReturnType<typeof api.models>>;
 
 const NO_SPEECH = "[no speech evidence]";
 
+// Terminal states of the coarse-scan job (see apps/api/services/pipeline.py).
+const SCAN_DONE = "READY_FOR_SELECTION";
+const SCAN_FAILED = "FAILED";
+const POLL_INTERVAL_MS = 1500;
+const POLL_TIMEOUT_MS = 4 * 60 * 1000; // hard cap so polling can never run forever
+
+const STEPS = ["Upload", "Detect people", "Select person", "Analyze speech", "Results"];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 function statusColor(status: ReadinessStatus): string {
   if (status === "READY") return "border-good text-good";
   if (status === "WARNING") return "border-warn text-warn";
@@ -37,6 +47,46 @@ function StatusBadge({ status }: { status: ReadinessStatus }) {
   );
 }
 
+function Spinner() {
+  return (
+    <span
+      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+      aria-hidden
+    />
+  );
+}
+
+function Stepper({ current }: { current: number }) {
+  return (
+    <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" aria-label="progress">
+      {STEPS.map((label, i) => {
+        const n = i + 1;
+        const done = n < current;
+        const active = n === current;
+        return (
+          <li key={label} className="flex items-center gap-2">
+            <span
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${
+                done
+                  ? "bg-good text-black"
+                  : active
+                    ? "bg-accent text-black"
+                    : "border border-border text-muted"
+              }`}
+            >
+              {done ? "✓" : n}
+            </span>
+            <span className={active ? "font-medium text-white" : done ? "text-muted" : "text-muted"}>
+              {label}
+            </span>
+            {n < STEPS.length && <span className="mx-1 text-border">→</span>}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export default function WorkspacePage({ params }: { params: { id: string } }) {
   const videoId = params.id;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -47,13 +97,13 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
   const [selected, setSelected] = useState<Person | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [gaze, setGaze] = useState<GazeTimeline | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [analyzingPerson, setAnalyzingPerson] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [personError, setPersonError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelsInfo | null>(null);
 
-  // Debug + evaluation (developer tools).
+  // Developer tools (hidden from normal users).
   const [debug, setDebug] = useState<DebugCrops | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [devMode, setDevMode] = useState(false);
@@ -61,36 +111,68 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
   const [evalResult, setEvalResult] = useState<PersonEvalResult | null>(null);
   const [evaluating, setEvaluating] = useState(false);
 
+  // Lifecycle guards: stop state updates / polling after unmount (§6, §20).
+  const mountedRef = useRef(true);
+  const pollingRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const refreshPeople = useCallback(async () => {
     const r = await api.listPeople(videoId);
+    if (!mountedRef.current) return r.people;
     setPeople(r.people);
     setStatus(r.status);
+    return r.people;
   }, [videoId]);
 
   useEffect(() => {
-    api.getVideo(videoId).then(setVideo).catch((e) => setError(e.message));
-    api.models().then(setModels).catch(() => undefined);
+    api.getVideo(videoId).then((v) => mountedRef.current && setVideo(v)).catch((e) => setError(e.message));
+    api.models().then((m) => mountedRef.current && setModels(m)).catch(() => undefined);
     refreshPeople().catch(() => undefined);
   }, [videoId, refreshPeople]);
 
-  async function runCoarseScan() {
-    setAnalyzing(true);
+  // ── Step 2: detect people (POST /analyze is async → poll status) ──────────
+  async function detectPeople() {
+    if (scanning || pollingRef.current) return; // block double-click / double-poll
+    setScanning(true);
     setError(null);
+    pollingRef.current = true;
+    const deadline = Date.now() + POLL_TIMEOUT_MS;
     try {
-      await api.analyzeVideo(videoId);
-      const s = await api.status(videoId);
-      setStatus(s.status);
-      if (s.error) setError(s.error);
-      await refreshPeople();
+      await api.analyzeVideo(videoId); // returns 202 immediately; work runs in background
+      let done = false;
+      while (Date.now() < deadline) {
+        if (!mountedRef.current) return;
+        await sleep(POLL_INTERVAL_MS);
+        const s = await api.status(videoId);
+        if (!mountedRef.current) return;
+        setStatus(s.status);
+        if (s.status === SCAN_DONE) {
+          done = true;
+          break;
+        }
+        if (s.status === SCAN_FAILED) {
+          throw new Error(s.error || "People detection failed. Please try a clearer video.");
+        }
+      }
+      if (!done) throw new Error("Detection is taking longer than expected. Please try again.");
+      const found = await refreshPeople();
+      if (mountedRef.current && found.length === 0) {
+        setError("No face was detected in this video. Try a clearer, more front-facing clip.");
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Coarse scan could not complete.");
+      if (mountedRef.current) setError(humanError(e, "People detection failed. Please try again."));
     } finally {
-      setAnalyzing(false);
+      pollingRef.current = false;
+      if (mountedRef.current) setScanning(false);
     }
   }
 
-  // Selecting a person no longer auto-runs analysis — the user clicks
-  // "Analyze speech" explicitly (§2). If a transcript already exists we show it.
+  // ── Step 3: select a person ───────────────────────────────────────────────
   async function selectPerson(p: Person) {
     setSelected(p);
     setTranscript(null);
@@ -99,9 +181,10 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
     setDebug(null);
     setShowDebug(false);
     setEvalResult(null);
+    // Show any prior transcript for this person (so re-selecting is instant).
     try {
       const t = await api.transcript(videoId, p.id);
-      if (t.segments.length) {
+      if (mountedRef.current && t.segments.length) {
         setTranscript(t);
         setGaze(await api.gaze(videoId, p.id).catch(() => null));
       }
@@ -110,51 +193,69 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
     }
   }
 
-  async function analyzeSpeech(override = false) {
-    if (!selected) return;
+  // ── Step 4: analyze speech (synchronous on the backend) ───────────────────
+  async function analyzeSpeech() {
+    if (!selected || analyzingPerson) return; // block double-click
+    const override = selected.status === "INSUFFICIENT";
     setAnalyzingPerson(true);
     setPersonError(null);
     setTranscript(null);
     try {
       const res = await api.analyzePerson(videoId, selected.id, override);
+      if (!mountedRef.current) return;
       if (res.state === "REAL_RESULT") {
         setTranscript(await api.transcript(videoId, selected.id));
         setGaze(await api.gaze(videoId, selected.id).catch(() => null));
       } else {
-        // Honest, specific reason — never a bare "Analysis failed" (§24).
+        // Honest, specific reason — never a bare "Analysis failed".
         setPersonError(res.detail || `No transcript produced (${res.state}).`);
         setTranscript(await api.transcript(videoId, selected.id).catch(() => null));
       }
     } catch (e) {
-      setPersonError(e instanceof Error ? e.message : "Speech analysis could not complete.");
+      if (mountedRef.current) setPersonError(humanError(e, "Speech analysis could not complete. Please try again."));
     } finally {
-      setAnalyzingPerson(false);
+      if (mountedRef.current) setAnalyzingPerson(false);
     }
+  }
+
+  // ── Step 5 → reset: analyze another person (same video) ───────────────────
+  function analyzeAnotherPerson() {
+    setSelected(null);
+    setTranscript(null);
+    setGaze(null);
+    setPersonError(null);
+    setDebug(null);
+    setShowDebug(false);
+    setEvalResult(null);
+    document.getElementById("people-gallery")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function loadDebug() {
     if (!selected) return;
     setShowDebug(true);
     try {
-      setDebug(await api.debugCrops(videoId, selected.id, 4));
+      const d = await api.debugCrops(videoId, selected.id, 4);
+      if (mountedRef.current) setDebug(d);
     } catch (e) {
-      setDebug({
-        video_id: videoId, person_id: selected.id, available: false,
-        note: e instanceof Error ? e.message : "Could not build debug crops.",
-        crop_mode: null, frames: [], sequence_url: null,
-      });
+      if (mountedRef.current)
+        setDebug({
+          video_id: videoId, person_id: selected.id, available: false,
+          note: humanError(e, "Could not build debug crops."),
+          crop_mode: null, frames: [], sequence_url: null,
+        });
     }
   }
 
   async function runEvaluation() {
-    if (!selected || !evalGt.trim()) return;
+    if (!selected || !evalGt.trim() || evaluating) return;
     setEvaluating(true);
     try {
-      setEvalResult(await api.evaluatePerson(videoId, selected.id, evalGt, false));
+      const r = await api.evaluatePerson(videoId, selected.id, evalGt, false);
+      if (mountedRef.current) setEvalResult(r);
     } catch (e) {
-      setPersonError(e instanceof Error ? e.message : "Evaluation failed.");
+      if (mountedRef.current) setPersonError(humanError(e, "Evaluation failed."));
     } finally {
-      setEvaluating(false);
+      if (mountedRef.current) setEvaluating(false);
     }
   }
 
@@ -165,6 +266,7 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
     }
   }
 
+  // Keyboard shortcuts for the player (ignored while typing).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const v = videoRef.current;
@@ -184,12 +286,21 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const hasPeople = people.length > 0;
+  const hasResults = !!transcript && transcript.segments.length > 0;
+  const currentStep = scanning || !hasPeople ? 2 : !selected ? 3 : !hasResults ? 4 : 5;
+
   return (
     <div className="min-h-screen">
       <TopBar status={status} />
-      <main className="mx-auto grid max-w-7xl grid-cols-1 gap-5 px-5 py-6 lg:grid-cols-[1fr_380px]">
-        {/* Left / center: player + gallery */}
-        <section className="space-y-5">
+      <main className="mx-auto max-w-5xl space-y-5 px-5 py-6">
+        {/* Progress stepper — the user always knows where they are. */}
+        <div className="rounded-xl border border-border bg-panel px-4 py-3">
+          <Stepper current={currentStep} />
+        </div>
+
+        {/* Video + metadata */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_300px]">
           <div className="overflow-hidden rounded-xl border border-border bg-black">
             {video?.media_url ? (
               <video ref={videoRef} src={video.media_url} controls className="w-full" />
@@ -197,77 +308,88 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
               <div className="p-16 text-center text-muted">Loading video…</div>
             )}
           </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={runCoarseScan}
-              disabled={analyzing}
-              className="focus-ring rounded-lg bg-accent px-4 py-2 font-medium text-black disabled:opacity-50"
-            >
-              {analyzing ? "Scanning…" : "Scan for people"}
-            </button>
-            <Link href={`/projects/${videoId}/evaluation`} className="text-sm text-accent underline">
-              Batch evaluation
-            </Link>
-            <label className="ml-auto flex items-center gap-2 text-xs text-muted">
-              <input type="checkbox" checked={devMode} onChange={(e) => setDevMode(e.target.checked)} />
-              Developer tools
-            </label>
-          </div>
-
-          {/* Visual-only lip reading is the default and only mode: the audio track is
-              never passed to the ML pipeline. */}
-          {video && (
-            <div className="flex flex-wrap items-center gap-3 text-xs">
-              <span className="rounded-full border border-good px-2 py-1 text-good">
-                ✓ Visual-only mode: ACTIVE
-              </span>
-              {models && (
-                <span className="rounded-full border border-accent px-2 py-1 text-accent">
-                  Model: {models.models.find((m) => m.active)?.display_name ?? models.active_model} ·{" "}
-                  {models.active_open_vocabulary ? "OPEN-vocabulary English" : "CLOSED vocab (benchmark)"} ·{" "}
+          <div className="space-y-2 text-xs">
+            <span className="inline-flex rounded-full border border-good px-2 py-1 text-good">
+              ✓ Visual-only mode: ACTIVE
+            </span>
+            {models && (
+              <div className="rounded-lg border border-border bg-panel p-3 text-muted">
+                <div className="text-[10px] uppercase tracking-wide">Model</div>
+                <div className="mt-0.5 text-white">
+                  {models.models.find((m) => m.active)?.display_name ?? models.active_model}
+                </div>
+                <div className="mt-0.5">
+                  {models.active_open_vocabulary ? "Open-vocabulary English" : "Closed vocab (benchmark)"} ·{" "}
                   {models.device.device.toUpperCase()}
-                </span>
-              )}
-              <span className="text-muted">
-                Audio: <strong>{video.metadata.has_audio ? "Present (ignored)" : "None"}</strong>
-                {video.metadata.has_audio && " — transcript is visual-only"}
-              </span>
-              <span className="text-muted">
-                {video.metadata.width}×{video.metadata.height}
-                {video.metadata.fps ? ` · ${Math.round(video.metadata.fps)}fps` : ""}
-              </span>
-            </div>
-          )}
+                </div>
+              </div>
+            )}
+            {video && (
+              <div className="rounded-lg border border-border bg-panel p-3 text-muted">
+                <Meta k="Audio" v={video.metadata.has_audio ? "Present (ignored)" : "None"} />
+                <Meta
+                  k="Resolution"
+                  v={`${video.metadata.width ?? "?"}×${video.metadata.height ?? "?"}${
+                    video.metadata.fps ? ` · ${Math.round(video.metadata.fps)}fps` : ""
+                  }`}
+                />
+                <Meta k="Duration" v={video.metadata.duration ? `${video.metadata.duration.toFixed(1)}s` : "—"} />
+              </div>
+            )}
+          </div>
+        </div>
 
-          {error && (
-            <div className="rounded-md border border-bad bg-panel2 p-3 text-sm text-bad">⛔ {error}</div>
-          )}
+        {/* ── PRIMARY ACTION CARD — changes with the current step ──────────── */}
+        <ActionCard
+          scanning={scanning}
+          status={status}
+          hasPeople={hasPeople}
+          selected={selected}
+          analyzingPerson={analyzingPerson}
+          hasResults={hasResults}
+          onDetect={detectPeople}
+          onAnalyzeSpeech={analyzeSpeech}
+          onAnotherPerson={analyzeAnotherPerson}
+        />
 
-          <div>
+        {error && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-bad bg-panel2 p-4 text-sm text-bad">
+            <span>⛔ {error}</span>
+            <button
+              onClick={detectPeople}
+              className="focus-ring rounded-lg border border-bad px-3 py-1.5 text-xs font-medium hover:bg-bad hover:text-black"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* ── PEOPLE GALLERY ──────────────────────────────────────────────── */}
+        {hasPeople && (
+          <section id="people-gallery">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-              People gallery
+              People detected · {people.length}
             </h2>
-            {people.length === 0 ? (
-              <p className="text-sm text-muted">
-                No people detected yet. Run “Scan for people” to detect everyone in the video.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {people.map((p) => (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {people.map((p) => {
+                const isSel = selected?.id === p.id;
+                return (
                   <button
                     key={p.id}
                     onClick={() => selectPerson(p)}
-                    className={`focus-ring rounded-lg border p-3 text-left ${
-                      selected?.id === p.id ? "border-accent" : "border-border"
-                    } bg-panel hover:border-accent`}
+                    aria-pressed={isSel}
+                    className={`focus-ring rounded-lg border p-3 text-left transition ${
+                      isSel ? "border-accent ring-1 ring-accent" : "border-border hover:border-accent"
+                    } bg-panel`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       {p.thumbnail_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.thumbnail_url} alt={p.label} className="h-12 w-12 rounded object-cover" />
+                        <img src={p.thumbnail_url} alt={p.label} className="h-14 w-14 rounded object-cover" />
                       ) : (
-                        <div className="h-12 w-12 rounded bg-panel2" />
+                        <div className="flex h-14 w-14 items-center justify-center rounded bg-panel2 text-muted">
+                          {p.track_number}
+                        </div>
                       )}
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
@@ -275,13 +397,20 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                           <StatusBadge status={p.status} />
                         </div>
                         <div className="text-xs text-muted">
-                          {p.screen_time.toFixed(1)}s · face ~{Math.round(p.quality_report?.avg_face_width_px ?? 0)}px
+                          {p.screen_time.toFixed(1)}s on screen · face ~
+                          {Math.round(p.quality_report?.avg_face_width_px ?? 0)}px
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          <QualityBar label="Lip-reading readiness" value={p.lip_readiness} />
                         </div>
                       </div>
-                    </div>
-                    <div className="mt-2 space-y-1">
-                      <QualityBar label="Face quality" value={p.face_quality} />
-                      <QualityBar label="Lip-reading readiness" value={p.lip_readiness} />
+                      <span
+                        className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium ${
+                          isSel ? "bg-accent text-black" : "border border-border text-muted"
+                        }`}
+                      >
+                        {isSel ? "Selected" : "Select"}
+                      </span>
                     </div>
                     {p.reason && (
                       <p className={`mt-2 text-xs ${p.status === "INSUFFICIENT" ? "text-bad" : "text-warn"}`}>
@@ -289,159 +418,177 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                       </p>
                     )}
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
-        {/* Right: selected person */}
-        <aside className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Selected person</h2>
-          {!selected ? (
-            <p className="text-sm text-muted">
-              Select a person, then run “Analyze speech” to transcribe their visible speech.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-border bg-panel p-4">
-                <div className="flex items-center gap-3">
-                  {selected.thumbnail_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={selected.thumbnail_url} alt={selected.label} className="h-14 w-14 rounded object-cover" />
-                  )}
-                  <div>
-                    <div className="flex items-center gap-2 font-semibold">
-                      {selected.label} <StatusBadge status={selected.status} />
-                    </div>
-                    <div className="text-xs text-muted">
-                      Readiness {selected.lip_readiness.toFixed(0)}/100 · visible {selected.visibility}%
-                    </div>
-                  </div>
-                </div>
-
-                {/* Full per-person quality report (§25). */}
-                {selected.quality_report && (
-                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-                    <QRow label="Face quality" value={`${selected.quality_report.face_quality_score.toFixed(0)}/100`} />
-                    <QRow label="Lip readiness" value={`${selected.quality_report.lip_readiness_score.toFixed(0)}/100`} />
-                    <QRow label="Usable time" value={`${selected.quality_report.usable_duration.toFixed(1)}s`} />
-                    <QRow label="Avg face width" value={`${selected.quality_report.avg_face_width_px.toFixed(0)}px`} />
-                    <QRow label="Mouth visible" value={`${selected.quality_report.avg_mouth_visibility_pct.toFixed(0)}%`} />
-                    <QRow label="Sharpness" value={selected.quality_report.avg_sharpness.toFixed(2)} />
-                    <QRow label="Pose (frontal)" value={selected.quality_report.avg_pose_quality.toFixed(2)} />
-                    <QRow label="Tracking" value={`${(selected.quality_report.tracking_stability * 100).toFixed(0)}%`} />
-                  </dl>
-                )}
-                {selected.quality_report?.reasons?.length ? (
-                  <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[11px] text-warn">
-                    {selected.quality_report.reasons.map((r, i) => <li key={i}>{r}</li>)}
-                  </ul>
-                ) : null}
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => analyzeSpeech(selected.status === "INSUFFICIENT")}
-                    disabled={analyzingPerson}
-                    className="focus-ring rounded-lg bg-accent px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
-                  >
-                    {analyzingPerson
-                      ? "Analyzing…"
-                      : selected.status === "INSUFFICIENT"
-                        ? "Analyze anyway (low quality)"
-                        : "Analyze speech"}
-                  </button>
-                  <Link
-                    href={`/projects/${videoId}/person/${selected.id}`}
-                    className="focus-ring rounded-lg border border-border px-3 py-2 text-xs hover:border-accent"
-                  >
-                    Detailed view →
-                  </Link>
-                </div>
-                <p className="mt-2 text-[11px] text-muted">
-                  Open-vocabulary English visual speech recognition. Lip reading is probabilistic —
-                  results are estimates from visible mouth movement, not certain transcription.
-                </p>
-              </div>
-
-              {personError && (
-                <div className="rounded-md border border-warn bg-panel2 p-3 text-xs text-warn">
-                  {personError}
-                </div>
+        {/* ── SELECTED PERSON QUALITY REPORT (context for Analyze speech) ──── */}
+        {selected && !hasResults && (
+          <section className="rounded-xl border border-border bg-panel p-4">
+            <div className="flex items-center gap-3">
+              {selected.thumbnail_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={selected.thumbnail_url} alt={selected.label} className="h-12 w-12 rounded object-cover" />
               )}
+              <div className="flex items-center gap-2 font-semibold">
+                {selected.label} <StatusBadge status={selected.status} />
+              </div>
+            </div>
+            {selected.quality_report && (
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-4">
+                <QRow label="Face quality" value={`${selected.quality_report.face_quality_score.toFixed(0)}/100`} />
+                <QRow label="Lip readiness" value={`${selected.quality_report.lip_readiness_score.toFixed(0)}/100`} />
+                <QRow label="Usable time" value={`${selected.quality_report.usable_duration.toFixed(1)}s`} />
+                <QRow label="Avg face width" value={`${selected.quality_report.avg_face_width_px.toFixed(0)}px`} />
+                <QRow label="Mouth visible" value={`${selected.quality_report.avg_mouth_visibility_pct.toFixed(0)}%`} />
+                <QRow label="Sharpness" value={selected.quality_report.avg_sharpness.toFixed(2)} />
+                <QRow label="Pose (frontal)" value={selected.quality_report.avg_pose_quality.toFixed(2)} />
+                <QRow label="Tracking" value={`${(selected.quality_report.tracking_stability * 100).toFixed(0)}%`} />
+              </dl>
+            )}
+            {selected.quality_report?.reasons?.length ? (
+              <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[11px] text-warn">
+                {selected.quality_report.reasons.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        )}
 
-              {/* Transcript */}
-              <div className="rounded-lg border border-border bg-panel p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Visual speech transcription</h3>
-                  {transcript?.model_version && (
-                    <span className="text-[10px] text-muted">{transcript.model_version}</span>
-                  )}
-                </div>
-                {transcript && <AvailabilityNotice availability={transcript.availability} />}
-                {transcript?.segments.length ? (
-                  <ul className="mt-2 space-y-2">
-                    {transcript.segments.map((s, i) => (
-                      <SegmentRow key={i} s={s} onSeek={() => seek(s.start_time)} />
+        {personError && (
+          <div className="rounded-lg border border-warn bg-panel2 p-3 text-sm text-warn">{personError}</div>
+        )}
+
+        {/* ── RESULTS ─────────────────────────────────────────────────────── */}
+        {selected && hasResults && (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+                Results · {selected.label}
+              </h2>
+              {transcript?.model_version && (
+                <span className="text-[10px] text-muted">{transcript.model_version}</span>
+              )}
+            </div>
+
+            {/* Transcript */}
+            <div className="rounded-xl border border-border bg-panel p-4">
+              <h3 className="mb-2 text-sm font-semibold">Visual speech transcription</h3>
+              {transcript && <AvailabilityNotice availability={transcript.availability} />}
+              <ul className="mt-2 space-y-2">
+                {transcript!.segments.map((s, i) => (
+                  <SegmentRow key={i} s={s} onSeek={() => seek(s.start_time)} />
+                ))}
+              </ul>
+            </div>
+
+            {/* Gaze + Export side by side */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-border bg-panel p-4">
+                <h3 className="mb-2 text-sm font-semibold">Gaze timeline</h3>
+                {gaze && <AvailabilityNotice availability={gaze.availability} />}
+                {gaze?.segments.length ? (
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {gaze.segments.map((g, i) => (
+                      <li key={i}>
+                        <button
+                          onClick={() => seek(g.start)}
+                          className="focus-ring flex w-full justify-between rounded px-2 py-1 hover:bg-panel2"
+                        >
+                          <span className="text-muted">
+                            {fmt(g.start)}–{fmt(g.end)}
+                          </span>
+                          <span>{g.direction}</span>
+                        </button>
+                      </li>
                     ))}
                   </ul>
                 ) : (
-                  transcript && <p className="mt-2 text-sm text-muted">No transcript segments.</p>
+                  <p className="mt-2 text-sm text-muted">Not available.</p>
                 )}
               </div>
 
-              {/* Debug mode (§12) */}
-              <div className="rounded-lg border border-border bg-panel p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Debug: what the model sees</h3>
-                  <button
-                    onClick={showDebug ? () => setShowDebug(false) : loadDebug}
-                    className="focus-ring rounded border border-border px-2 py-1 text-[11px] hover:border-accent"
-                  >
-                    {showDebug ? "Hide" : "Show crops"}
-                  </button>
+              <div className="rounded-xl border border-border bg-panel p-4">
+                <h3 className="mb-2 text-sm font-semibold">Export</h3>
+                <div className="flex flex-wrap gap-2">
+                  {["srt", "txt", "json", "report"].map((fmtName) => (
+                    <a
+                      key={fmtName}
+                      href={api.exportUrl(videoId, selected.id, fmtName)}
+                      className="focus-ring rounded border border-border px-3 py-1 text-xs hover:border-accent"
+                    >
+                      {fmtName.toUpperCase()}
+                    </a>
+                  ))}
                 </div>
-                {showDebug && debug && (
-                  <div className="mt-3 space-y-3">
-                    <p className="text-[11px] text-muted">{debug.note}</p>
-                    {debug.sequence_url && (
-                      <div>
-                        <div className="mb-1 text-[10px] uppercase text-muted">Temporal sequence (lower-face)</div>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={debug.sequence_url} alt="temporal sequence" className="w-full rounded border border-border" />
-                      </div>
-                    )}
-                    <div className="grid grid-cols-4 gap-2">
-                      {debug.frames.map((f, i) => (
-                        <div key={i} className="space-y-1">
-                          {f.original_url && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={f.original_url} alt="orig" className="w-full rounded border border-border" title={`t=${f.timestamp}s`} />
-                          )}
-                          <div className="flex gap-1">
-                            {f.lower_face_url && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={f.lower_face_url} alt="lower" className="w-1/2 rounded border border-border" title="lower-face (model input)" />
-                            )}
-                            {f.mouth_url && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={f.mouth_url} alt="mouth" className="w-1/2 rounded border border-border" title="mouth crop" />
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {!debug.available && <p className="text-xs text-warn">{debug.note}</p>}
-                  </div>
-                )}
+                <Link
+                  href={`/projects/${videoId}/person/${selected.id}`}
+                  className="mt-3 inline-block text-xs text-accent underline"
+                >
+                  Open detailed view →
+                </Link>
               </div>
+            </div>
 
-              {/* Developer-only evaluation (§20–§22) */}
+            {/* Debug: what the model sees */}
+            <div className="rounded-xl border border-border bg-panel p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Debug: what the model sees</h3>
+                <button
+                  onClick={showDebug ? () => setShowDebug(false) : loadDebug}
+                  className="focus-ring rounded border border-border px-2 py-1 text-[11px] hover:border-accent"
+                >
+                  {showDebug ? "Hide" : "Show crops"}
+                </button>
+              </div>
+              {showDebug && debug && (
+                <div className="mt-3 space-y-3">
+                  <p className="text-[11px] text-muted">{debug.note}</p>
+                  {debug.sequence_url && (
+                    <div>
+                      <div className="mb-1 text-[10px] uppercase text-muted">Temporal sequence (lower-face)</div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={debug.sequence_url} alt="temporal sequence" className="w-full rounded border border-border" />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-4 gap-2">
+                    {debug.frames.map((f, i) => (
+                      <div key={i} className="space-y-1">
+                        {f.original_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={f.original_url} alt="orig" className="w-full rounded border border-border" title={`t=${f.timestamp}s`} />
+                        )}
+                        <div className="flex gap-1">
+                          {f.lower_face_url && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={f.lower_face_url} alt="lower" className="w-1/2 rounded border border-border" title="lower-face (model input)" />
+                          )}
+                          {f.mouth_url && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={f.mouth_url} alt="mouth" className="w-1/2 rounded border border-border" title="mouth crop" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {!debug.available && <p className="text-xs text-warn">{debug.note}</p>}
+                </div>
+              )}
+            </div>
+
+            {/* Developer-only evaluation */}
+            <div className="rounded-xl border border-border bg-panel p-4">
+              <label className="flex items-center gap-2 text-xs text-muted">
+                <input type="checkbox" checked={devMode} onChange={(e) => setDevMode(e.target.checked)} />
+                Developer tools (evaluate against a known transcript)
+              </label>
               {devMode && (
-                <div className="rounded-lg border border-border bg-panel p-4">
-                  <h3 className="text-sm font-semibold">Evaluation (developer)</h3>
-                  <p className="mt-1 text-[11px] text-muted">
-                    Paste a known ground-truth transcript to score WER/CER. Not shown to end users.
+                <div className="mt-3">
+                  <p className="text-[11px] text-muted">
+                    Paste the known ground-truth transcript to score WER/CER. Used only after inference; not shown to end users.
                   </p>
                   <textarea
                     value={evalGt}
@@ -452,13 +599,16 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                   <button
                     onClick={runEvaluation}
                     disabled={evaluating || !evalGt.trim()}
-                    className="focus-ring mt-2 rounded-lg border border-accent px-3 py-1.5 text-xs text-accent disabled:opacity-50"
+                    className="focus-ring mt-2 inline-flex items-center gap-2 rounded-lg border border-accent px-3 py-1.5 text-xs text-accent disabled:opacity-50"
                   >
+                    {evaluating && <Spinner />}
                     {evaluating ? "Scoring…" : "Run evaluation"}
                   </button>
                   {evalResult && evalResult.wer != null && (
                     <div className="mt-3 space-y-1 text-xs">
-                      <div className="text-muted">Prediction: <span className="text-fg">{evalResult.prediction}</span></div>
+                      <div className="text-muted">
+                        Prediction: <span className="text-white">{evalResult.prediction}</span>
+                      </div>
                       <div className="flex flex-wrap gap-3">
                         <span>WER <strong>{(evalResult.wer * 100).toFixed(1)}%</strong></span>
                         <span>CER <strong>{((evalResult.cer ?? 0) * 100).toFixed(1)}%</strong></span>
@@ -474,59 +624,164 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                   )}
                 </div>
               )}
-
-              {/* Gaze */}
-              <div className="rounded-lg border border-border bg-panel p-4">
-                <h3 className="mb-2 text-sm font-semibold">Gaze timeline</h3>
-                {gaze && <AvailabilityNotice availability={gaze.availability} />}
-                {gaze?.segments.length ? (
-                  <ul className="mt-2 space-y-1 text-sm">
-                    {gaze.segments.map((g, i) => (
-                      <li key={i}>
-                        <button
-                          onClick={() => seek(g.start)}
-                          className="focus-ring flex w-full justify-between rounded px-2 py-1 hover:bg-panel2"
-                        >
-                          <span className="text-muted">{fmt(g.start)}–{fmt(g.end)}</span>
-                          <span>{g.direction}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  gaze && <p className="mt-2 text-sm text-muted">No gaze data.</p>
-                )}
-              </div>
-
-              {/* Exports */}
-              <div className="rounded-lg border border-border bg-panel p-4">
-                <h3 className="mb-2 text-sm font-semibold">Export</h3>
-                <div className="flex flex-wrap gap-2">
-                  {["srt", "txt", "json", "report"].map((fmtName) => (
-                    <a
-                      key={fmtName}
-                      href={api.exportUrl(videoId, selected.id, fmtName)}
-                      className="rounded border border-border px-3 py-1 text-xs hover:border-accent"
-                    >
-                      {fmtName.toUpperCase()}
-                    </a>
-                  ))}
-                </div>
-              </div>
             </div>
-          )}
-        </aside>
+
+            {/* Next-action CTAs */}
+            <div className="flex flex-wrap gap-3 border-t border-border pt-4">
+              {people.length > 1 && (
+                <button
+                  onClick={analyzeAnotherPerson}
+                  className="focus-ring rounded-lg border border-border px-4 py-2 text-sm font-medium hover:border-accent"
+                >
+                  Analyze another person
+                </button>
+              )}
+              <Link
+                href="/"
+                className="focus-ring rounded-lg bg-accent px-4 py-2 text-sm font-medium text-black"
+              >
+                Analyze another video
+              </Link>
+            </div>
+          </section>
+        )}
       </main>
+    </div>
+  );
+}
+
+// ── Primary action card ─────────────────────────────────────────────────────
+function ActionCard(props: {
+  scanning: boolean;
+  status: string;
+  hasPeople: boolean;
+  selected: Person | null;
+  analyzingPerson: boolean;
+  hasResults: boolean;
+  onDetect: () => void;
+  onAnalyzeSpeech: () => void;
+  onAnotherPerson: () => void;
+}) {
+  const { scanning, status, hasPeople, selected, analyzingPerson, hasResults } = props;
+
+  if (scanning) {
+    return (
+      <Card tone="busy">
+        <div className="flex items-center gap-3">
+          <Spinner />
+          <div>
+            <div className="font-medium text-white">Analyzing video — detecting people…</div>
+            <div className="text-xs text-muted">{humanStatus(status)}</div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (!hasPeople) {
+    return (
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="font-medium text-white">Step 2 — Detect people in this video</div>
+            <div className="text-xs text-muted">
+              We scan the whole video and list every clearly-visible person so you can pick one.
+            </div>
+          </div>
+          <button
+            onClick={props.onDetect}
+            className="focus-ring rounded-lg bg-accent px-5 py-2.5 font-medium text-black"
+          >
+            Analyze video
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
+  if (analyzingPerson) {
+    return (
+      <Card tone="busy">
+        <div className="flex items-center gap-3">
+          <Spinner />
+          <div>
+            <div className="font-medium text-white">Analyzing speech…</div>
+            <div className="text-xs text-muted">
+              Running visual speech recognition on the selected person. The first run also loads the
+              model and can take up to ~2 minutes.
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (hasResults) {
+    return (
+      <Card tone="done">
+        <div className="flex items-center gap-3">
+          <span className="text-good">✓</span>
+          <div className="font-medium text-white">Analysis complete — results are below.</div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (selected) {
+    const insufficient = selected.status === "INSUFFICIENT";
+    return (
+      <Card tone={insufficient ? "warn" : "default"}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="font-medium text-white">
+              Step 4 — {selected.label} selected
+            </div>
+            <div className="text-xs text-muted">
+              {insufficient
+                ? "Visual quality is low for this person — you can still try, but results may be poor."
+                : "Run visual speech recognition on this person’s mouth movement."}
+            </div>
+          </div>
+          <button
+            onClick={props.onAnalyzeSpeech}
+            className="focus-ring rounded-lg bg-accent px-5 py-2.5 font-medium text-black"
+          >
+            {insufficient ? "Analyze speech anyway" : "Analyze speech"}
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <div className="font-medium text-white">Step 3 — Select a person below</div>
+      <div className="text-xs text-muted">Pick whose visible speech you want to transcribe.</div>
+    </Card>
+  );
+}
+
+function Card({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "busy" | "done" | "warn" }) {
+  const border =
+    tone === "busy" ? "border-accent" : tone === "done" ? "border-good" : tone === "warn" ? "border-warn" : "border-border";
+  return <div className={`rounded-xl border ${border} bg-panel p-4`}>{children}</div>;
+}
+
+function Meta({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex justify-between gap-3 py-0.5">
+      <span className="text-[10px] uppercase tracking-wide">{k}</span>
+      <span className="text-white">{v}</span>
     </div>
   );
 }
 
 function QRow({ label, value }: { label: string; value: string }) {
   return (
-    <>
+    <div className="flex justify-between gap-2">
       <dt className="text-muted">{label}</dt>
-      <dd className="text-right font-medium">{value}</dd>
-    </>
+      <dd className="font-medium text-white">{value}</dd>
+    </div>
   );
 }
 
@@ -537,7 +792,9 @@ function SegmentRow({ s, onSeek }: { s: TranscriptSegment; onSeek: () => void })
     <li>
       <button onClick={onSeek} className="focus-ring block w-full rounded p-2 text-left hover:bg-panel2">
         <div className="flex justify-between text-xs text-muted">
-          <span>{fmt(s.start_time)}–{fmt(s.end_time)}</span>
+          <span>
+            {fmt(s.start_time)}–{fmt(s.end_time)}
+          </span>
           {!isNoSpeech && (
             <span className={confidenceClass(confidenceLevel(s.confidence, s.uncertain))}>
               {confidenceLevel(s.confidence, s.uncertain)} · {(s.confidence * 100).toFixed(0)}%
@@ -545,7 +802,7 @@ function SegmentRow({ s, onSeek }: { s: TranscriptSegment; onSeek: () => void })
             </span>
           )}
         </div>
-        <div className={isNoSpeech ? "text-muted italic" : s.uncertain ? "confidence-low text-warn" : ""}>
+        <div className={isNoSpeech ? "italic text-muted" : s.uncertain ? "confidence-low text-warn" : "text-white"}>
           {isNoSpeech ? "No speech evidence (mouth not moving)" : s.text}
         </div>
         <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-muted">
@@ -567,6 +824,33 @@ function SegmentRow({ s, onSeek }: { s: TranscriptSegment; onSeek: () => void })
       </button>
     </li>
   );
+}
+
+function humanStatus(status: string): string {
+  const map: Record<string, string> = {
+    QUEUED: "Queued…",
+    DETECTING_FACES: "Detecting faces…",
+    DETECTING_PEOPLE: "Detecting people…",
+    QUALITY_ANALYSIS: "Scoring face quality…",
+    READY_FOR_SELECTION: "Done.",
+  };
+  return map[status] || "Working…";
+}
+
+function humanError(e: unknown, fallback: string): string {
+  // Keep the full error in the console for developers; show a human message.
+  if (e instanceof Error) {
+    // eslint-disable-next-line no-console
+    console.error("[SilentSpeak]", e);
+    // Surface backend-provided detail when it is already human-readable.
+    if (e.message && !/^\d{3}$/.test(e.message) && !/failed with status/i.test(e.message)) {
+      return e.message;
+    }
+  } else {
+    // eslint-disable-next-line no-console
+    console.error("[SilentSpeak]", e);
+  }
+  return fallback;
 }
 
 function fmt(t: number): string {
