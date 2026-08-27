@@ -28,6 +28,8 @@ const SCAN_DONE = "READY_FOR_SELECTION";
 const SCAN_FAILED = "FAILED";
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 4 * 60 * 1000; // hard cap so polling can never run forever
+// In-progress coarse-scan job states (see apps/api/services/pipeline.py).
+const SCAN_ACTIVE = ["QUEUED", "DETECTING_FACES", "DETECTING_PEOPLE", "QUALITY_ANALYSIS"];
 
 const STEPS = ["Upload", "Detect people", "Select person", "Analyze speech", "Results"];
 
@@ -110,6 +112,7 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
   const [evalGt, setEvalGt] = useState("");
   const [evalResult, setEvalResult] = useState<PersonEvalResult | null>(null);
   const [evaluating, setEvaluating] = useState(false);
+  const [evalError, setEvalError] = useState<string | null>(null);
 
   // Lifecycle guards: stop state updates / polling after unmount (§6, §20).
   const mountedRef = useRef(true);
@@ -135,42 +138,83 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
     refreshPeople().catch(() => undefined);
   }, [videoId, refreshPeople]);
 
-  // ── Step 2: detect people (POST /analyze is async → poll status) ──────────
-  async function detectPeople() {
-    if (scanning || pollingRef.current) return; // block double-click / double-poll
+  // ── Centralized coarse-scan polling (single source of truth, §9) ──────────
+  // Assumes a scan job is running (freshly started, or already in progress on a
+  // page refresh). Polls status until the job ends, times out, or unmounts.
+  const pollScan = useCallback(async () => {
+    if (pollingRef.current) return; // never poll twice at once
+    pollingRef.current = true;
     setScanning(true);
     setError(null);
-    pollingRef.current = true;
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     try {
-      await api.analyzeVideo(videoId); // returns 202 immediately; work runs in background
-      let done = false;
       while (Date.now() < deadline) {
         if (!mountedRef.current) return;
-        await sleep(POLL_INTERVAL_MS);
         const s = await api.status(videoId);
         if (!mountedRef.current) return;
         setStatus(s.status);
         if (s.status === SCAN_DONE) {
-          done = true;
-          break;
+          const found = await refreshPeople();
+          if (mountedRef.current && found.length === 0) {
+            setError("No people were detected in this video. Try a clearer, more front-facing clip.");
+          }
+          return;
         }
         if (s.status === SCAN_FAILED) {
           throw new Error(s.error || "People detection failed. Please try a clearer video.");
         }
+        await sleep(POLL_INTERVAL_MS);
       }
-      if (!done) throw new Error("Detection is taking longer than expected. Please try again.");
-      const found = await refreshPeople();
-      if (mountedRef.current && found.length === 0) {
-        setError("No face was detected in this video. Try a clearer, more front-facing clip.");
-      }
+      throw new Error("Detection is taking longer than expected. Please try again.");
     } catch (e) {
       if (mountedRef.current) setError(humanError(e, "People detection failed. Please try again."));
     } finally {
       pollingRef.current = false;
       if (mountedRef.current) setScanning(false);
     }
+  }, [videoId, refreshPeople]);
+
+  // ── Step 2: detect people (POST /analyze is async → poll status) ──────────
+  async function detectPeople() {
+    if (scanning || pollingRef.current) return; // block double-click / double-poll
+    setScanning(true); // close the click→poll gap so the button can't re-fire
+    setError(null);
+    try {
+      await api.analyzeVideo(videoId); // returns 202 immediately; work runs in background
+    } catch (e) {
+      if (mountedRef.current) {
+        setError(humanError(e, "Could not start analysis. Please try again."));
+        setScanning(false);
+      }
+      return;
+    }
+    await pollScan();
   }
+
+  // Resume polling if the user refreshes the page while a scan is mid-flight (§9),
+  // so we never show the "Detect people" CTA or a premature empty gallery for a
+  // job that is actually still running.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await api.status(videoId);
+        if (cancelled || !mountedRef.current) return;
+        // Only resume when a real scan JOB is in flight. A freshly-uploaded video
+        // reports status "QUEUED" with no job_id yet — that is NOT a running scan,
+        // so we must show the "Analyze video" CTA, not a spinner.
+        if (s.job_id && SCAN_ACTIVE.includes(s.status)) {
+          setStatus(s.status);
+          pollScan();
+        }
+      } catch {
+        /* no job yet — expected on a fresh project */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [videoId, pollScan]);
 
   // ── Step 3: select a person ───────────────────────────────────────────────
   async function selectPerson(p: Person) {
@@ -249,11 +293,12 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
   async function runEvaluation() {
     if (!selected || !evalGt.trim() || evaluating) return;
     setEvaluating(true);
+    setEvalError(null);
     try {
       const r = await api.evaluatePerson(videoId, selected.id, evalGt, false);
       if (mountedRef.current) setEvalResult(r);
     } catch (e) {
-      if (mountedRef.current) setPersonError(humanError(e, "Evaluation failed."));
+      if (mountedRef.current) setEvalError(humanError(e, "Evaluation could not run. Please try again."));
     } finally {
       if (mountedRef.current) setEvaluating(false);
     }
@@ -458,8 +503,22 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
           </section>
         )}
 
-        {personError && (
-          <div className="rounded-lg border border-warn bg-panel2 p-3 text-sm text-warn">{personError}</div>
+        {/* A genuine failure (no transcript produced) — distinct from a low-confidence
+            success, and offers Retry (§5, §11). */}
+        {personError && !hasResults && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-bad bg-panel2 p-4 text-sm">
+            <div className="text-bad">
+              <div className="font-semibold">⛔ Analysis failed</div>
+              <p className="mt-1 text-muted">{personError}</p>
+            </div>
+            <button
+              onClick={() => analyzeSpeech()}
+              disabled={analyzingPerson}
+              className="focus-ring rounded-lg border border-bad px-3 py-1.5 text-xs font-medium text-bad hover:bg-bad hover:text-black disabled:opacity-50"
+            >
+              Retry analysis
+            </button>
+          </div>
         )}
 
         {/* ── RESULTS ─────────────────────────────────────────────────────── */}
@@ -473,6 +532,9 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                 <span className="text-[10px] text-muted">{transcript.model_version}</span>
               )}
             </div>
+
+            {/* 1. Analysis status + confidence/quality summary (§5, §6, §17). */}
+            <ResultsSummary t={transcript!} />
 
             {/* Transcript */}
             <div className="rounded-xl border border-border bg-panel p-4">
@@ -622,6 +684,7 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                   {evalResult && evalResult.wer == null && (
                     <p className="mt-2 text-xs text-warn">{evalResult.note}</p>
                   )}
+                  {evalError && <p className="mt-2 text-xs text-bad">{evalError}</p>}
                 </div>
               )}
             </div>
@@ -772,6 +835,72 @@ function Meta({ k, v }: { k: string; v: string }) {
     <div className="flex justify-between gap-3 py-0.5">
       <span className="text-[10px] uppercase tracking-wide">{k}</span>
       <span className="text-white">{v}</span>
+    </div>
+  );
+}
+
+const UNCERTAIN = "[uncertain]";
+
+// Analysis status + confidence/quality summary. A REAL_RESULT with low confidence
+// is a SUCCESS with uncertainty — never a failure (§5, §17). It never claims
+// accuracy; it states the measured confidence and, when not high, how to improve it.
+function ResultsSummary({ t }: { t: Transcript }) {
+  const speech = t.segments.filter((s) => s.text !== NO_SPEECH);
+  const withWords = speech.filter((s) => s.text && s.text !== UNCERTAIN && !s.uncertain);
+  const conf = speech.length ? speech.reduce((a, s) => a + (s.confidence || 0), 0) / speech.length : 0;
+  const visSegs = t.segments.filter((s) => s.visual_quality != null);
+  const vis = visSegs.length
+    ? visSegs.reduce((a, s) => a + (s.visual_quality || 0), 0) / visSegs.length
+    : null;
+  const noSpeech = withWords.length === 0;
+  const level = confidenceLevel(conf, false); // HIGH / MEDIUM / LOW
+  const label = noSpeech
+    ? "No confident speech"
+    : level === "HIGH"
+      ? "High confidence"
+      : level === "MEDIUM"
+        ? "Moderate confidence"
+        : "Low confidence";
+  const labelColor = noSpeech
+    ? "text-muted"
+    : level === "HIGH"
+      ? "text-good"
+      : level === "MEDIUM"
+        ? "text-warn"
+        : "text-bad";
+
+  return (
+    <div className="rounded-xl border border-good bg-panel p-4">
+      <div className="flex items-center gap-2">
+        <span className="text-good">✓</span>
+        <span className="font-semibold text-white">Analysis complete</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Stat label="Confidence" value={noSpeech ? "—" : `${(conf * 100).toFixed(0)}%`} />
+        <Stat label="Reliability" value={label} valueClass={labelColor} />
+        <Stat label="Visual quality" value={vis != null ? `${vis.toFixed(0)}%` : "—"} />
+      </div>
+      {noSpeech ? (
+        <p className="mt-3 rounded-md border border-border bg-panel2 p-2 text-xs text-muted">
+          The analysis ran successfully, but no confident speech was detected for this person —
+          the mouth may not be moving in view, or the face is unclear.
+        </p>
+      ) : level !== "HIGH" ? (
+        <p className="mt-3 rounded-md border border-warn bg-panel2 p-2 text-xs text-warn">
+          Results are available, but confidence is {level === "MEDIUM" ? "moderate" : "low"}. Lip
+          reading is probabilistic — for more reliable results use a clearer, closer, well-lit,
+          front-facing view of the speaker.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function Stat({ label, value, valueClass = "text-white" }: { label: string; value: string; valueClass?: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-panel2 p-3">
+      <div className="text-[10px] uppercase tracking-wide text-muted">{label}</div>
+      <div className={`mt-0.5 text-lg font-semibold ${valueClass}`}>{value}</div>
     </div>
   );
 }
