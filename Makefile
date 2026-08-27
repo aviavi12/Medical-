@@ -1,4 +1,4 @@
-# SilentSpeak Lab — developer commands
+# LipSight — developer commands
 .DEFAULT_GOAL := help
 PY ?= python3
 VENV ?= .venv

@@ -1,4 +1,4 @@
-# SilentSpeak Lab — Limitations & Scientific Caveats
+# LipSight — Limitations & Scientific Caveats
 
 This page is surfaced in the product UI (§101). It states plainly what the system can and cannot
 do, so results are never over-trusted.

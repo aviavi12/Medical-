@@ -5,7 +5,7 @@ export function TopBar({ status }: { status?: string }) {
     <header className="flex items-center justify-between border-b border-border bg-panel px-5 py-3">
       <div className="flex items-center gap-3">
         <Link href="/" className="text-lg font-semibold tracking-tight">
-          🔎 SilentSpeak <span className="text-accent">Lab</span>
+          🔎 Lip<span className="text-accent">Sight</span>
         </Link>
         <nav className="ml-4 hidden gap-4 text-sm text-muted md:flex">
           <Link href="/projects" className="hover:text-white">Projects</Link>

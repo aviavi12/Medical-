@@ -1,4 +1,4 @@
-"""SilentSpeak Lab FastAPI application (Milestone 1)."""
+"""LipSight FastAPI application (Milestone 1)."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     configure_logging(settings.log_level)
     settings.storage_root.mkdir(parents=True, exist_ok=True)
     create_all()  # ensure tables exist (SQLite dev / first run)
-    get_logger().info("SilentSpeak API started", extra={"stage": "startup"})
+    get_logger().info("LipSight API started", extra={"stage": "startup"})
     yield
 
 

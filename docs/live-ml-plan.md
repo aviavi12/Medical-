@@ -1,4 +1,4 @@
-# SilentSpeak Lab — Live ML Plan & Status
+# LipSight — Live ML Plan & Status
 
 This document records the transition from architecture-with-seams to a **real,
 runnable** visual speech recognition pipeline, and the exact models, sources,

@@ -1,4 +1,4 @@
-# SilentSpeak Lab — Implementation Plan
+# LipSight — Implementation Plan
 
 Incremental, milestone-gated build. Each milestone: **implement → test → run → inspect → fix →
 document → proceed**. No uncontrolled single pass; no fabricated ML results.

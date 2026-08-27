@@ -1,1 +1,1 @@
-"""SilentSpeak Lab FastAPI backend."""
+"""LipSight FastAPI backend."""

@@ -595,6 +595,13 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
               </div>
             </div>
 
+            {/* Technical & developer details — collapsed by default so the main
+                result dominates (§9); native <details> is keyboard-accessible. */}
+            <details className="rounded-xl border border-border bg-panel2">
+              <summary className="focus-ring cursor-pointer select-none px-4 py-3 text-sm font-medium text-muted marker:text-muted">
+                Technical &amp; developer details
+              </summary>
+              <div className="space-y-4 p-4 pt-0">
             {/* Debug: what the model sees */}
             <div className="rounded-xl border border-border bg-panel p-4">
               <div className="flex items-center justify-between">
@@ -688,6 +695,8 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                 </div>
               )}
             </div>
+              </div>
+            </details>
 
             {/* Next-action CTAs */}
             <div className="flex flex-wrap gap-3 border-t border-border pt-4">
@@ -871,7 +880,10 @@ function ResultsSummary({ t }: { t: Transcript }) {
 
   return (
     <div className="rounded-xl border border-good bg-panel p-4">
-      <div className="flex items-center gap-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-accent">
+        LipSight Analysis
+      </div>
+      <div className="mt-1 flex items-center gap-2">
         <span className="text-good">✓</span>
         <span className="font-semibold text-white">Analysis complete</span>
       </div>
@@ -970,14 +982,14 @@ function humanError(e: unknown, fallback: string): string {
   // Keep the full error in the console for developers; show a human message.
   if (e instanceof Error) {
     // eslint-disable-next-line no-console
-    console.error("[SilentSpeak]", e);
+    console.error("[LipSight]", e);
     // Surface backend-provided detail when it is already human-readable.
     if (e.message && !/^\d{3}$/.test(e.message) && !/failed with status/i.test(e.message)) {
       return e.message;
     }
   } else {
     // eslint-disable-next-line no-console
-    console.error("[SilentSpeak]", e);
+    console.error("[LipSight]", e);
   }
   return fallback;
 }

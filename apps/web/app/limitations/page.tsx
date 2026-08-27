@@ -18,7 +18,7 @@ export default function LimitationsPage() {
       <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="text-2xl font-semibold">Product limitations</h1>
         <p className="mt-2 text-muted">
-          SilentSpeak Lab is for legitimate video analysis and research. Please read these
+          LipSight is for legitimate video analysis and research. Please read these
           limitations before interpreting any result.
         </p>
         <div className="mt-6 space-y-4">

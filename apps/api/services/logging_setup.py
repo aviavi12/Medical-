@@ -40,5 +40,5 @@ def configure_logging(level: str = "INFO") -> None:
     root.setLevel(level.upper())
 
 
-def get_logger(name: str = "silentspeak") -> logging.Logger:
+def get_logger(name: str = "lipsight") -> logging.Logger:
     return logging.getLogger(name)

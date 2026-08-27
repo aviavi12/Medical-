@@ -1,4 +1,4 @@
-# SilentSpeak Lab web image (Next.js).
+# LipSight web image (Next.js).
 FROM node:20-slim AS deps
 WORKDIR /app
 COPY apps/web/package.json apps/web/package-lock.json* ./

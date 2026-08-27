@@ -1,5 +1,5 @@
 [project]
-name = "silentspeak-lab"
+name = "lipsight"
 version = "0.1.0"
 description = "English silent-video lip reading + multi-person tracking + gaze analysis + synthetic speech"
 requires-python = ">=3.11"

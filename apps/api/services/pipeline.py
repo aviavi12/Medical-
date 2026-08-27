@@ -36,7 +36,7 @@ from ml.quality import get_quality_estimator
 from ml.quality.readiness import PersonAggregate, lip_reading_readiness, readiness_status
 from ml.tracking import get_tracker
 
-logger = get_logger("silentspeak.pipeline")
+logger = get_logger("lipsight.pipeline")
 
 
 @dataclass

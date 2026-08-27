@@ -1,4 +1,4 @@
-# SilentSpeak Lab — Browser Product & Real-World Failure Matrix
+# LipSight — Browser Product & Real-World Failure Matrix
 
 This document records the **user-testable, browser-driven** product: upload → scan →
 select person → **Analyze speech** (open-vocabulary SyncVSR, visual-only) → timestamped

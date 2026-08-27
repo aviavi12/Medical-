@@ -1,4 +1,4 @@
-# SilentSpeak Lab API image.
+# LipSight API image.
 FROM python:3.11-slim
 
 # FFmpeg for video; libgl/libglib for OpenCV + MediaPipe; espeak-ng for generic TTS.

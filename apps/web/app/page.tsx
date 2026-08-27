@@ -29,8 +29,12 @@ export default function LandingPage() {
     <div className="min-h-screen">
       <TopBar />
       <main className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="text-4xl font-bold tracking-tight">SilentSpeak Lab</h1>
-        <p className="mt-3 text-lg text-muted">Analyze visible speech in English video.</p>
+        <h1 className="text-4xl font-bold tracking-tight">
+          Lip<span className="text-accent">Sight</span>
+        </h1>
+        <p className="mt-3 text-lg text-muted">
+          Open-vocabulary English visual speech recognition — analyze visible speech in video.
+        </p>
 
         <div
           className="mt-10 rounded-xl border border-dashed border-border bg-panel p-10 text-center"

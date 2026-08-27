@@ -41,7 +41,7 @@ def test_report_includes_limitations_and_models():
         video={"id": "v"}, person={"id": "p"}, transcript={"segments": []},
         gaze=None, model_versions=[{"model_version": "mock-vsr:test"}],
     )
-    assert report["report_type"] == "silentspeak_analysis"
+    assert report["report_type"] == "lipsight_analysis"
     assert len(report["limitations"]) >= 4
     assert report["model_versions"][0]["model_version"] == "mock-vsr:test"
 

@@ -1,4 +1,4 @@
-# SilentSpeak Lab — Model Benchmarks
+# LipSight — Model Benchmarks
 
 This file records **measured** results that drive default model selection (§68–§71). Until a
 benchmark is run in a given environment, defaults follow the reasoned choices in

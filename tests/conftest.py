@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 # ── Must run before any app/ml import: point config at temp resources ────────
-_TMP_ROOT = Path(tempfile.mkdtemp(prefix="silentspeak_test_"))
+_TMP_ROOT = Path(tempfile.mkdtemp(prefix="lipsight_test_"))
 _DB_PATH = _TMP_ROOT / "test.sqlite"
 _STORAGE = _TMP_ROOT / "storage"
 _STORAGE.mkdir(parents=True, exist_ok=True)

@@ -36,7 +36,7 @@ def grid_truth(code: str) -> str | None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="SilentSpeak Lab real lip-reading demo")
+    ap = argparse.ArgumentParser(description="LipSight real lip-reading demo")
     ap.add_argument("--video", default=None, help="your own video; default = a labeled GRID clip")
     ap.add_argument("--weights", default="overlap", choices=["overlap", "unseen"])
     args = ap.parse_args()

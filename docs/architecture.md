@@ -1,4 +1,4 @@
-# SilentSpeak Lab — Architecture
+# LipSight — Architecture
 
 > English silent-video lip reading + multi-person tracking + gaze analysis + synthetic speech.
 

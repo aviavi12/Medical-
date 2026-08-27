@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     )
 
     app_env: str = "development"
-    app_name: str = "SilentSpeak Lab"
+    app_name: str = "LipSight"
     app_version: str = "0.1.0"
     log_level: str = "INFO"
 

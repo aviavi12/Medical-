@@ -1,4 +1,4 @@
-# SilentSpeak Lab — Model Selection
+# LipSight — Model Selection
 
 For every AI model we document: name, version, source, license, input requirements, output, GPU
 & memory requirements, accuracy metrics, limitations, and installation procedure (§98). This

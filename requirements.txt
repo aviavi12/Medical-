@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# SilentSpeak Lab — core backend + CV runtime dependencies.
+# LipSight — core backend + CV runtime dependencies.
 # These are enough to run the API, DB, video validation/metadata, frame
 # sampling, quality scoring, exports, and the full test-suite (with mock ML).
 # Heavy ML runtimes live in requirements-ml.txt (installed only when needed).

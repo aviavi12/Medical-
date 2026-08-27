@@ -1,8 +1,8 @@
-# SilentSpeak Lab
+# LipSight
 
 **English silent-video lip reading + multi-person tracking + gaze analysis + synthetic speech.**
 
-SilentSpeak Lab analyzes visible speech from English-language video. You upload a video (up to
+LipSight analyzes visible speech from English-language video. You upload a video (up to
 ~5 minutes, 720p+ recommended), the system detects and tracks **all** reasonably visible people,
 scores each person's face quality and lip-reading readiness, and lets you select any qualifying
 person to run visual speech recognition, approximate gaze analysis, and optional generic

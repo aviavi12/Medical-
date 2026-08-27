@@ -1,18 +1,18 @@
-# SilentSpeak Lab — local orchestration (§91).
+# LipSight — local orchestration (§91).
 # GPU configuration is documented separately in docker/README.md.
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: silentspeak
-      POSTGRES_PASSWORD: silentspeak
-      POSTGRES_DB: silentspeak
+      POSTGRES_USER: lipsight
+      POSTGRES_PASSWORD: lipsight
+      POSTGRES_DB: lipsight
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U silentspeak"]
+      test: ["CMD-SHELL", "pg_isready -U lipsight"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,7 +23,7 @@ services:
       dockerfile: docker/api.Dockerfile
     environment:
       APP_ENV: development
-      DATABASE_URL: postgresql+psycopg://silentspeak:silentspeak@postgres:5432/silentspeak
+      DATABASE_URL: postgresql+psycopg://lipsight:lipsight@postgres:5432/lipsight
       STORAGE_PATH: /data/storage
       DEVICE: auto
     ports:

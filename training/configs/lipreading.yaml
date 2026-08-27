@@ -1,4 +1,4 @@
-# SilentSpeak Lab — lip-reading training configuration (§73, §74).
+# LipSight — lip-reading training configuration (§73, §74).
 # Training is offline and separate from inference. Do not hard-code these values
 # elsewhere; the training scripts read them from here.
 

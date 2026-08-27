@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SilentSpeak Lab",
-  description: "Analyze visible speech in English video.",
+  title: "LipSight",
+  description: "Open-vocabulary English visual speech recognition — analyze visible speech in video.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

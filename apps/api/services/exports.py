@@ -65,7 +65,7 @@ def build_analysis_report(
 ) -> dict[str, Any]:
     """Structured analysis report (§83) — includes limitations + reproducibility."""
     return {
-        "report_type": "silentspeak_analysis",
+        "report_type": "lipsight_analysis",
         "video": video,
         "selected_person": person,
         "transcript": transcript,
@@ -79,6 +79,6 @@ def build_analysis_report(
             "The system infers nothing about a person's thoughts or intentions.",
         ],
         "processing": {
-            "app": "SilentSpeak Lab",
+            "app": "LipSight",
         },
     }

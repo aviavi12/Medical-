@@ -27,7 +27,7 @@ def _timed(fn):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="SilentSpeak pipeline benchmark")
+    parser = argparse.ArgumentParser(description="LipSight pipeline benchmark")
     parser.add_argument("--video", required=True, help="Path to a test video")
     parser.add_argument("--report", default="bench.json", help="Output JSON path")
     parser.add_argument("--fps", type=float, default=8.0, help="Coarse sampling FPS")

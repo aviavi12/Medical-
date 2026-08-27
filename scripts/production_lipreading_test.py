@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SilentSpeak production open-vocabulary lip-reading test (Phase 32).
+"""LipSight production open-vocabulary lip-reading test (Phase 32).
 
     python scripts/production_lipreading_test.py \
         --video path/to/no_audio_english_video.mp4 \
@@ -89,7 +89,7 @@ def main() -> int:
          "-of", "csv=p=0", str(noaudio)], capture_output=True, text=True).stdout.strip()
 
     print("=" * 53)
-    print("SILENTSPEAK PRODUCTION TEST")
+    print("LIPSIGHT PRODUCTION TEST")
     print("=" * 53)
     print(f"Video:            {video_path.name}")
     print(f"Audio:            NONE / IGNORED  (audio streams after strip: {astreams or 'NONE'})")

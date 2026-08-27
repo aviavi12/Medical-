@@ -51,7 +51,7 @@ def _copy(src: Path, dst: Path, force: bool) -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Download SilentSpeak Lab model weights")
+    ap = argparse.ArgumentParser(description="Download LipSight model weights")
     ap.add_argument("--force", action="store_true", help="re-download even if present")
     ap.add_argument("--skip-fixtures", action="store_true", help="don't fetch GRID test clips")
     ap.add_argument("--skip-openvocab", action="store_true", help="don't fetch the 1.14GB SyncVSR checkpoint")

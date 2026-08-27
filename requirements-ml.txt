@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# SilentSpeak Lab — heavy ML runtimes for the REAL pipeline.
+# LipSight — heavy ML runtimes for the REAL pipeline.
 # These exact pins are verified working together on CPU in this build
 # (Python 3.11). Without them the corresponding subsystems report
 # MODEL_UNAVAILABLE with the exact missing dependency — never fabricated output.
