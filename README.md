@@ -47,17 +47,21 @@ make demo   # → "BIN BLUE AT F TWO NOW" (WER 0.000, GRID-LipNet benchmark)
 > `docs/current-lipreading-limitations.md`. The app never falls back to GRID silently, never uses
 > audio/ASR, and never hallucinates missing words.
 
-Models used: **LipNet-GRID** (Fengdalu/LipNet-PyTorch, MIT) for visual speech recognition,
+Models used: **SyncVSR** (Vox+LRS2+LRS3, Conformer, MIT) for open-vocabulary visual speech
+recognition (production); **GRID-LipNet** (MIT) as a closed-vocabulary benchmark/CI model;
 **dlib-68** for mouth alignment (research-only license), **MediaPipe** (Apache-2.0) for face
 detection + gaze landmarks, **YOLOv8n** (Ultralytics, AGPL-3.0) for person detection. Full
 details, sources, licenses, and measured results: [`docs/live-ml-plan.md`](docs/live-ml-plan.md)
 and [`docs/lipreading-model-comparison.md`](docs/lipreading-model-comparison.md).
 
-> **Scope:** the shipped checkpoint is trained on GRID's 6-word command grammar — the "suitable
-> English video" domain. It is not yet an open-vocabulary conversational lip reader; upgrading to
-> AV-HuBERT/Auto-AVSR is a drop-in adapter once those weights are reachable (their hosts are
-> blocked by this environment's egress policy). The app reports `MODEL_UNAVAILABLE`/`NO_SIGNAL`
-> rather than hallucinating out-of-domain speech.
+> **Scope & honesty.** The production model (SyncVSR) is a real open-vocabulary sentence-level VSR
+> model. Its accuracy on **natural connected English** has not yet been measured in this repo — a
+> real natural-English WER requires natural-English test clips, which this environment's egress
+> policy blocked. The drop-in evaluation harness (`evaluation/open_vocabulary/`,
+> `scripts/evaluate_open_vocabulary.py`, and the in-app Developer evaluation panel) is ready to
+> produce that number from a user-supplied clip. This is an **experimental MVP measurement**, not a
+> clinical, medical-grade, or production-accuracy claim. The app never uses audio, never falls back
+> to GRID for open-vocabulary requests, and never invents words for silent or low-confidence windows.
 
 ---
 

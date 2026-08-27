@@ -44,14 +44,17 @@ export default function ProjectsPage() {
                 href={`/projects/${v.id}`}
                 className="block rounded-lg border border-border bg-panel p-4 hover:border-accent"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <span className="font-medium">{v.filename}</span>
-                  <span className="text-xs text-muted">{v.status}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusPill(v.status)}`}>
+                    {statusLabel(v.status)}
+                  </span>
                 </div>
                 <div className="mt-1 text-sm text-muted">
                   {v.metadata.width}×{v.metadata.height}
                   {v.metadata.duration ? ` · ${v.metadata.duration.toFixed(1)}s` : ""}
-                  {v.metadata.has_audio ? " · has audio" : " · no audio"}
+                  {v.metadata.has_audio ? " · audio ignored" : " · no audio"}
+                  {v.created_at ? ` · ${fmtDate(v.created_at)}` : ""}
                 </div>
               </Link>
             </li>
@@ -60,4 +63,28 @@ export default function ProjectsPage() {
       </main>
     </div>
   );
+}
+
+function statusLabel(status: string): string {
+  const map: Record<string, string> = {
+    QUEUED: "Uploaded",
+    READY_FOR_SELECTION: "Ready to analyze",
+    DETECTING_FACES: "Detecting people…",
+    QUALITY_ANALYSIS: "Assessing quality…",
+    FAILED: "Failed",
+    COMPLETED: "Analyzed",
+  };
+  return map[status] || status;
+}
+
+function statusPill(status: string): string {
+  if (status === "FAILED") return "border-bad text-bad";
+  if (status === "READY_FOR_SELECTION" || status === "COMPLETED") return "border-good text-good";
+  return "border-border text-muted";
+}
+
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }

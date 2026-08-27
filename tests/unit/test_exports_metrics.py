@@ -44,6 +44,9 @@ def test_report_includes_limitations_and_models():
     assert report["report_type"] == "lipsight_analysis"
     assert len(report["limitations"]) >= 4
     assert report["model_versions"][0]["model_version"] == "mock-vsr:test"
+    # The exported report must carry an explicit AI-generated / not-diagnostic disclaimer.
+    assert "disclaimer" in report and "medical" in report["disclaimer"].lower()
+    assert report["product"] == "LipSight"
 
 
 def test_wer_cer_perfect_and_imperfect():

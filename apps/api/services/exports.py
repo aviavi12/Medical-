@@ -66,6 +66,13 @@ def build_analysis_report(
     """Structured analysis report (§83) — includes limitations + reproducibility."""
     return {
         "report_type": "lipsight_analysis",
+        "product": "LipSight",
+        "disclaimer": (
+            "AI-generated visual speech analysis. The transcript is reconstructed from visible "
+            "mouth movement only (no audio) and may be inaccurate. It should not be treated as a "
+            "definitive transcription or a medical diagnosis. 'Confidence' is a model-likelihood "
+            "score, not a measure of word-level accuracy."
+        ),
         "video": video,
         "selected_person": person,
         "transcript": transcript,
@@ -73,6 +80,8 @@ def build_analysis_report(
         "model_versions": model_versions,
         "limitations": [
             "Lip reading is probabilistic; the same mouth movement can map to multiple words.",
+            "Confidence is a model-likelihood proxy (exp of the mean per-token decoder score), "
+            "not the fraction of words that are correct.",
             "Gaze is approximate; head direction is not identical to eye gaze.",
             "Accuracy depends heavily on face visibility, resolution, pose, and lighting.",
             "Synthetic speech is not the original audio and does not clone any real voice.",

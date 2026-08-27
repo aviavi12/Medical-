@@ -185,6 +185,8 @@ class PersonAnalysisResultOut(BaseModel):
     gaze: int = 0
     landmarks_available: bool = False
     lipreading_available: bool = False
+    processing_seconds: float | None = None  # measured wall-clock for Stage B (§11)
+    device: str | None = None                # cpu / cuda / mps
 
 
 class DebugCropFrameOut(BaseModel):
@@ -227,7 +229,9 @@ class PersonEvalResultOut(BaseModel):
     insertions: int | None = None
     ref_words: int | None = None
     hyp_words: int | None = None
-    average_confidence: float | None = None
+    sentence_accuracy: float | None = None   # exact-match after normalization (0 or 1 per sample)
+    average_confidence: float | None = None  # mean model-likelihood proxy, NOT accuracy
+    normalization: str = ""                  # exactly what was done to both strings before scoring
     note: str = ""
 
 

@@ -41,6 +41,19 @@ function statusColor(status: ReadinessStatus): string {
   return "border-bad text-bad";
 }
 
+// Plain-language visual-condition phrase for each real backend readiness state (§4).
+function statusPhrase(status: ReadinessStatus): string {
+  if (status === "READY") return "Good visual conditions";
+  if (status === "WARNING") return "Limited visual quality — results may be less reliable";
+  return "Insufficient visual information for reliable analysis";
+}
+
+function statusTextColor(status: ReadinessStatus): string {
+  if (status === "READY") return "text-good";
+  if (status === "WARNING") return "text-warn";
+  return "text-bad";
+}
+
 function StatusBadge({ status }: { status: ReadinessStatus }) {
   return (
     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusColor(status)}`}>
@@ -113,6 +126,7 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
   const [evalResult, setEvalResult] = useState<PersonEvalResult | null>(null);
   const [evaluating, setEvaluating] = useState(false);
   const [evalError, setEvalError] = useState<string | null>(null);
+  const [procInfo, setProcInfo] = useState<{ seconds: number | null; device: string | null } | null>(null);
 
   // Lifecycle guards: stop state updates / polling after unmount (§6, §20).
   const mountedRef = useRef(true);
@@ -261,6 +275,7 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
     try {
       const res = await api.analyzePerson(videoId, selected.id, override);
       if (!mountedRef.current) return;
+      setProcInfo({ seconds: res.processing_seconds, device: res.device });
       if (res.state === "REAL_RESULT") {
         setTranscript(await api.transcript(videoId, selected.id));
         setGaze(await api.gaze(videoId, selected.id).catch(() => null));
@@ -507,8 +522,13 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={selected.thumbnail_url} alt={selected.label} className="h-12 w-12 rounded object-cover" />
               )}
-              <div className="flex items-center gap-2 font-semibold">
-                {selected.label} <StatusBadge status={selected.status} />
+              <div>
+                <div className="flex items-center gap-2 font-semibold">
+                  {selected.label} <StatusBadge status={selected.status} />
+                </div>
+                <div className={`text-xs ${statusTextColor(selected.status)}`}>
+                  {statusPhrase(selected.status)}
+                </div>
               </div>
             </div>
             {selected.quality_report && (
@@ -581,7 +601,7 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
             </div>
 
             {/* Analysis evidence — real measured signals only (§7, §16). */}
-            <AnalysisEvidence t={transcript!} person={selected} models={models} />
+            <AnalysisEvidence t={transcript!} person={selected} models={models} proc={procInfo} />
 
             {/* Gaze + Export side by side */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -717,11 +737,17 @@ export default function WorkspacePage({ params }: { params: { id: string } }) {
                       <div className="flex flex-wrap gap-3">
                         <span>WER <strong>{(evalResult.wer * 100).toFixed(1)}%</strong></span>
                         <span>CER <strong>{((evalResult.cer ?? 0) * 100).toFixed(1)}%</strong></span>
+                        {evalResult.sentence_accuracy != null && (
+                          <span>Sentence acc <strong>{(evalResult.sentence_accuracy * 100).toFixed(0)}%</strong></span>
+                        )}
                         <span>S {evalResult.substitutions} · D {evalResult.deletions} · I {evalResult.insertions}</span>
                         {evalResult.average_confidence != null && (
-                          <span>conf {(evalResult.average_confidence * 100).toFixed(0)}%</span>
+                          <span>model conf {(evalResult.average_confidence * 100).toFixed(0)}%</span>
                         )}
                       </div>
+                      {evalResult.normalization && (
+                        <p className="mt-1 text-[10px] text-muted">Normalization: {evalResult.normalization}</p>
+                      )}
                     </div>
                   )}
                   {evalResult && evalResult.wer == null && (
@@ -933,7 +959,7 @@ function ResultsSummary({ t }: { t: Transcript }) {
         <span className="font-semibold text-white">Analysis complete</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label="Confidence" value={noSpeech ? "—" : `${(conf * 100).toFixed(0)}%`} />
+        <Stat label="Model confidence" value={noSpeech ? "—" : `${(conf * 100).toFixed(0)}%`} />
         <Stat label="Reliability" value={label} valueClass={labelColor} />
         <Stat label="Visual quality" value={vis != null ? `${vis.toFixed(0)}%` : "—"} />
       </div>
@@ -950,9 +976,10 @@ function ResultsSummary({ t }: { t: Transcript }) {
         </p>
       ) : null}
       <p className="mt-3 text-[11px] leading-relaxed text-muted">
-        Confidence reflects how strongly the visible evidence supports the generated
-        transcription. It is affected by video quality, mouth visibility, head movement and
-        lighting — it is not a guarantee of correctness.
+        <strong className="text-muted">Model confidence</strong> is the model&apos;s own certainty
+        in this reconstruction (the likelihood of the decoded sequence), not the share of words that
+        are correct — e.g. 43% does not mean 43% of words are right. It rises with clearer, closer,
+        well-lit, front-facing video and falls with poor visibility or motion.
       </p>
     </div>
   );
@@ -1004,10 +1031,12 @@ function AnalysisEvidence({
   t,
   person,
   models,
+  proc,
 }: {
   t: Transcript;
   person: Person | null;
   models: ModelsInfo | null;
+  proc: { seconds: number | null; device: string | null } | null;
 }) {
   const framed = t.segments.filter((s) => s.frame_start != null && s.frame_end != null);
   const framesAnalyzed = framed.length
@@ -1028,6 +1057,8 @@ function AnalysisEvidence({
     ["Mouth visibility", qr ? `${qr.avg_mouth_visibility_pct.toFixed(0)}%` : "Not available"],
     ["Avg face width", qr ? `${qr.avg_face_width_px.toFixed(0)}px` : "Not available"],
     ["Sharpness", qr ? qr.avg_sharpness.toFixed(2) : "Not available"],
+    ["Processing time", proc?.seconds != null ? `${proc.seconds.toFixed(1)}s` : "Not available"],
+    ["Compute", proc?.device ? proc.device.toUpperCase() : (models ? models.device.device.toUpperCase() : "Not available")],
     ["Model", model ?? "Not available"],
   ];
   return (

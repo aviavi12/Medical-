@@ -135,7 +135,9 @@ export interface PersonEvalResult {
   insertions: number | null;
   ref_words: number | null;
   hyp_words: number | null;
+  sentence_accuracy: number | null;
   average_confidence: number | null;
+  normalization: string;
   note: string;
 }
 
@@ -172,4 +174,6 @@ export interface PersonAnalysisResult {
   gaze: number;
   landmarks_available: boolean;
   lipreading_available: boolean;
+  processing_seconds: number | null;
+  device: string | null;
 }

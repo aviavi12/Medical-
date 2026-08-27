@@ -139,10 +139,17 @@ def analyze_person(
     db: Session = Depends(get_db_session),
 ) -> PersonAnalysisResultOut:
     """Run Stage B for a person. Runs synchronously; honest availability state."""
+    import time as _time
+
     _get_video(db, video_id)
     _get_person(db, video_id, person_id)
     override = bool(body and body.override_quality_gates)
+    t0 = _time.perf_counter()
     result = process_person_analysis(video_id, person_id, override) or {}
+    elapsed = round(_time.perf_counter() - t0, 2)
+    from ml.common.config import get_ml_config
+    from ml.common.device import resolve_device
+
     return PersonAnalysisResultOut(
         video_id=video_id,
         person_id=person_id,
@@ -152,6 +159,8 @@ def analyze_person(
         gaze=result.get("gaze", 0),
         landmarks_available=result.get("landmarks_available", False),
         lipreading_available=result.get("lipreading_available", False),
+        processing_seconds=elapsed,
+        device=resolve_device(get_ml_config().device),
     )
 
 
@@ -399,16 +408,24 @@ def evaluate_person(
         return PersonEvalResultOut(video_id=video_id, person_id=person_id, prediction="",
                                    reference=reference,
                                    note="No transcript to evaluate — analyze this person first.")
+    from training.evaluation import sentence_accuracy
+
     ops = alignment_ops(prediction, reference)
     avg_conf = round(sum(confs) / len(confs), 4) if confs else None
+    sent_acc = round(sentence_accuracy([prediction], [reference]), 4)
     return PersonEvalResultOut(
         video_id=video_id, person_id=person_id, prediction=prediction, reference=reference,
         wer=round(word_error_rate(prediction, reference), 4),
         cer=round(character_error_rate(prediction, reference), 4),
         substitutions=ops["sub"], deletions=ops["del"], insertions=ops["ins"],
         ref_words=ops["ref_words"], hyp_words=ops["hyp_words"],
+        sentence_accuracy=sent_acc,
         average_confidence=avg_conf,
-        note="Word-level WER/CER with substitution/deletion/insertion counts.",
+        # Exactly what is done to BOTH strings before scoring — no cherry-picking.
+        normalization="lowercased; surface punctuation .,!?;:\"'`()[]{} removed; whitespace "
+                      "collapsed. Contractions, numbers-vs-words and spelling are NOT normalized.",
+        note="Word-level WER/CER (substitution/deletion/insertion) on the raw model output vs "
+             "your ground truth. average_confidence is a model-likelihood proxy, not accuracy.",
     )
 
 
